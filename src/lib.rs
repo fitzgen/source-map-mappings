@@ -4,6 +4,7 @@ extern crate vlq;
 
 mod comparators;
 
+use comparators::ComparatorFunction;
 use std::marker::PhantomData;
 use std::mem;
 use std::u32;
@@ -47,7 +48,8 @@ where
 #[derive(Debug)]
 pub struct Mappings {
     by_generated: LazilySorted<Mapping, comparators::ByGeneratedLocation>,
-    by_original: LazilySorted<Mapping, comparators::ByOriginalLocation>,
+    by_original: Option<Vec<Mapping>>,
+    computed_column_spans: bool,
 }
 
 impl Mappings {
@@ -59,12 +61,49 @@ impl Mappings {
         }
     }
 
+    pub fn compute_column_spans(&mut self) {
+        if self.computed_column_spans {
+            return;
+        }
+
+        self.by_generated.sort();
+        let by_generated = match self.by_generated {
+            LazilySorted::Sorted(ref mut items, _) => items,
+            LazilySorted::Unsorted(_) => unreachable!(),
+        };
+        let mut by_generated = by_generated.iter_mut().peekable();
+
+        while let Some(this_mapping) = by_generated.next() {
+            if let Some(next_mapping) = by_generated.peek() {
+                if this_mapping.generated_line == next_mapping.generated_line {
+                    this_mapping.last_generated_column = Some(next_mapping.generated_column);
+                }
+            }
+        }
+
+        self.computed_column_spans = true;
+    }
+
     pub fn by_original_location(&mut self) -> &[Mapping] {
-        self.by_original.sort();
-        match self.by_original {
+        if let Some(ref by_original) = self.by_original {
+            return by_original;
+        }
+
+        self.compute_column_spans();
+
+        let by_generated = match self.by_generated {
             LazilySorted::Sorted(ref items, _) => items,
             LazilySorted::Unsorted(_) => unreachable!(),
-        }
+        };
+
+        let mut by_original: Vec<_> = by_generated
+            .iter()
+            .filter(|m| m.original.is_some())
+            .cloned()
+            .collect();
+        by_original.sort_by(<comparators::ByOriginalLocation as ComparatorFunction<_>>::compare);
+        self.by_original = Some(by_original);
+        self.by_original.as_ref().unwrap()
     }
 }
 
@@ -72,7 +111,8 @@ impl Default for Mappings {
     fn default() -> Mappings {
         Mappings {
             by_generated: LazilySorted::Unsorted(vec![]),
-            by_original: LazilySorted::Unsorted(vec![]),
+            by_original: None,
+            computed_column_spans: false,
         }
     }
 }
@@ -81,7 +121,26 @@ impl Default for Mappings {
 pub struct Mapping {
     generated_line: u32,
     generated_column: u32,
+    last_generated_column: Option<u32>,
     original: Option<OriginalLocation>,
+}
+
+impl Mapping {
+    pub fn generated_line(&self) -> u32 {
+        self.generated_line
+    }
+
+    pub fn generated_column(&self) -> u32 {
+        self.generated_column
+    }
+
+    pub fn last_generated_column(&self) -> Option<u32> {
+        self.last_generated_column
+    }
+
+    pub fn original(&self) -> Option<&OriginalLocation> {
+        self.original.as_ref()
+    }
 }
 
 impl Default for Mapping {
@@ -89,6 +148,7 @@ impl Default for Mapping {
         Mapping {
             generated_line: 0,
             generated_column: 0,
+            last_generated_column: None,
             original: None,
         }
     }
@@ -119,7 +179,7 @@ where
     }
 
     if new < 0 {
-        return Err(Error::UnexpectedNegativeNumber)
+        return Err(Error::UnexpectedNegativeNumber);
     }
 
     *previous = new as u32;
@@ -136,7 +196,6 @@ pub fn parse_mappings(input: &[u8]) -> Result<Mappings, Error> {
 
     let mut mappings = Mappings::default();
     let mut by_generated = vec![];
-    let mut by_original = vec![];
 
     let mut input = input.iter().cloned().peekable();
 
@@ -180,15 +239,11 @@ pub fn parse_mappings(input: &[u8]) -> Result<Mappings, Error> {
                     })
                 };
 
-                if mapping.original.is_some() {
-                    by_original.push(mapping.clone());
-                }
                 by_generated.push(mapping);
             }
         }
     }
 
-    mappings.by_original = LazilySorted::Unsorted(by_original);
     mappings.by_generated = LazilySorted::Unsorted(by_generated);
     Ok(mappings)
 }

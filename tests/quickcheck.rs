@@ -6,6 +6,7 @@ extern crate vlq;
 use quickcheck::{Arbitrary, Gen};
 use std::fmt;
 use std::i64;
+use std::iter;
 use std::marker::PhantomData;
 
 trait VlqRange: 'static + Send + Copy + Clone + fmt::Debug + fmt::Display {
@@ -23,6 +24,10 @@ where
 {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         Vlq(g.gen_range(R::low(), R::high()), PhantomData)
+    }
+
+    fn shrink(&self) -> Box<Iterator<Item = Self>> {
+        Box::new(self.0.shrink().map(|x| Vlq(x, PhantomData)))
     }
 }
 
@@ -79,6 +84,69 @@ where
             _ => unreachable!(),
         }
     }
+
+    fn shrink(&self) -> Box<Iterator<Item = Self>> {
+        match *self {
+            Mapping::Generated { generated_column } => {
+                Box::new(generated_column.shrink().map(|generated_column| Mapping::Generated { generated_column }))
+            }
+            Mapping::Original {
+                generated_column,
+                source,
+                original_line,
+                original_column,
+            } => {
+                let shrunkens = generated_column.shrink().zip(
+                    source.shrink().zip(
+                        original_line.shrink().zip(
+                            original_column.shrink()
+                        )
+                    )
+                );
+                let shrunkens = shrunkens.map(move |(generated_column, (source, (original_line, original_column)))| {
+                    Mapping::Original {
+                        generated_column,
+                        source,
+                        original_line,
+                        original_column,
+                    }
+                });
+
+                let generated = Mapping::Generated { generated_column };
+                Box::new(iter::once(generated).chain(shrunkens))
+            }
+            Mapping::OriginalWithName {
+                generated_column,
+                source,
+                original_line,
+                original_column,
+                name,
+            } => {
+                let shrunkens = generated_column.shrink().zip(
+                    source.shrink().zip(
+                        original_line.shrink().zip(
+                            original_column.shrink().zip(
+                                name.shrink()
+                            )
+                        )
+                    )
+                );
+                let shrunkens = shrunkens.map(move |(generated_column, (source, (original_line, (original_column, name))))| {
+                    Mapping::OriginalWithName {
+                        generated_column,
+                        source,
+                        original_line,
+                        original_column,
+                        name,
+                    }
+                });
+
+                let generated = Mapping::Generated { generated_column };
+                let original = Mapping::Original { generated_column, source, original_line, original_column };
+                Box::new(iter::once(generated).chain(iter::once(original)).chain(shrunkens))
+            }
+        }
+    }
 }
 
 impl<R: Copy> fmt::Display for Mapping<R> {
@@ -123,6 +191,10 @@ where
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         GeneratedLine(Vec::arbitrary(g))
     }
+
+    fn shrink(&self) -> Box<Iterator<Item = Self>> {
+        Box::new(self.0.shrink().map(|v| GeneratedLine(v)))
+    }
 }
 
 impl<R: Copy> fmt::Display for GeneratedLine<R> {
@@ -148,6 +220,10 @@ where
 {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         Mappings(Vec::arbitrary(g))
+    }
+
+    fn shrink(&self) -> Box<Iterator<Item = Self>> {
+        Box::new(self.0.shrink().map(|v| Mappings(v)))
     }
 }
 
@@ -193,7 +269,6 @@ impl VlqRange for SmallPositives {
     fn high() -> i64 { 5 }
 }
 
-
 quickcheck! {
     fn parse_without_panicking(mappings: Mappings<FullRange>) -> () {
         let mappings_string = mappings.to_string();
@@ -203,6 +278,27 @@ quickcheck! {
     fn parse_valid_mappings(mappings: Mappings<SmallPositives>) -> Result<(), source_map_mappings::Error> {
         let mappings_string = mappings.to_string();
         source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        Ok(())
+    }
+
+    fn compute_column_spans(mappings: Mappings<SmallPositives>) -> Result<(), source_map_mappings::Error> {
+        let mappings_string = mappings.to_string();
+        let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+
+        // Can compute column spans without panicking.
+        mappings.compute_column_spans();
+
+        // And those column spans make sense.
+        for window in mappings.by_generated_location().windows(2) {
+            let this_mapping = &window[0];
+            let next_mapping = &window[1];
+            if this_mapping.generated_line() == next_mapping.generated_line() {
+                assert_eq!(this_mapping.last_generated_column().unwrap(), next_mapping.generated_column());
+            } else {
+                assert!(this_mapping.last_generated_column().is_none());
+            }
+        }
+
         Ok(())
     }
 }
