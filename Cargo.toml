@@ -1,0 +1,10 @@
+[package]
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+name = "source-map-mappings"
+version = "0.1.0"
+
+[dependencies]
+vlq = "0.3"
+
+[dev-dependencies]
+quickcheck = "0.5.0"
