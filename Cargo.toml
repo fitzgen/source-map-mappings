@@ -1,7 +1,15 @@
 [package]
-authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>", "Tom Tromey <tom@tromey.com>"]
+description = "Parse the `mappings` string from a source map."
+keywords = ["sourcemap", "source", "map", "vlq"]
+license = "Apache-2.0/MIT"
 name = "source-map-mappings"
+readme = "./README.md"
+repository = "https://github.com/fitzgen/source-map-mappings"
 version = "0.1.0"
+
+[badges.travis-ci]
+repository = "fitzgen/source-map-mappings"
 
 [dependencies]
 vlq = "0.3"

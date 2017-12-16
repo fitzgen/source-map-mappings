@@ -1,0 +1,16 @@
+language: rust
+
+cache: cargo
+
+before_script:
+  - cargo install -f cargo-readme
+
+script:
+  - cargo build
+  - cargo test
+  - cargo bench
+
+rust:
+  - stable
+  - beta
+  - nightly
