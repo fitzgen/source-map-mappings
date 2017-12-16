@@ -2,15 +2,24 @@ language: rust
 
 cache: cargo
 
-before_script:
-  - cargo install -f cargo-readme
+matrix:
+  - rust:
+    - stable
+    - beta
+    - nightly
+  - env:
+    - JOB="test"
+    - JOB="bench"
+    - JOB="wasm"
+  - exclude:
+    - rust: stable
+      env: JOB="bench"
+    - rust: beta
+      env: JOB="bench"
+    - rust: stable
+      env: JOB="wasm"
+    - rust: beta
+      env: JOB="wasm"
 
 script:
-  - cargo build
-  - cargo test
-  - cargo bench
-
-rust:
-  - stable
-  - beta
-  - nightly
+  - ./ci/script.sh
