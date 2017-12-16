@@ -43,14 +43,10 @@ dual licensed as above, without any additional terms or conditions.
  */
 
 #![deny(missing_debug_implementations)]
-#![cfg_attr(target_arch = "wasm32", crate_type = "cdylib")]
 
 extern crate vlq;
 
 mod comparators;
-
-#[cfg(target_arch = "wasm32")]
-pub mod exports;
 
 use comparators::ComparatorFunction;
 use std::marker::PhantomData;
