@@ -1,0 +1,10 @@
+[package]
+name = "source-map-mappings-c-api"
+version = "0.1.0"
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+
+[dependencies]
+source-map-mappings = { path = ".." }
+
+[lib]
+crate-type = ["cdylib"]

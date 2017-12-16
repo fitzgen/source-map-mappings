@@ -12,7 +12,13 @@ case "$JOB" in
         ;;
     "wasm")
         rustup target add wasm32-unknown-unknown
+        cd source-map-mappings-c-api/
+
         cargo build --target wasm32-unknown-unknown
+        test -f target/wasm32-unknown-unknown/debug/source_map_mappings_c_api.wasm
+
+        cargo build --release --target wasm32-unknown-unknown
+        test -f target/wasm32-unknown-unknown/release/source_map_mappings_c_api.wasm
         ;;
     *)
         echo "Unknown \$JOB = '$JOB'"

@@ -51,6 +51,7 @@ mod comparators;
 use comparators::ComparatorFunction;
 use std::marker::PhantomData;
 use std::mem;
+use std::slice;
 use std::u32;
 
 #[derive(Debug)]
@@ -219,6 +220,44 @@ impl Mappings {
             },
         }
     }
+
+    pub fn all_generated_locations_for(
+        &mut self,
+        source: u32,
+        original_line: u32,
+        original_column: Option<u32>,
+    ) -> AllGeneratedLocationsFor {
+        let query_column = original_column.unwrap_or(0);
+
+        let by_original = self.by_original_location();
+
+        let idx = by_original.binary_search_by(|m| {
+            let original = m.original.as_ref().unwrap();
+            original
+                .source
+                .cmp(&source)
+                .then(original.original_line.cmp(&original_line))
+                .then(original.original_column.cmp(&query_column))
+        });
+
+        let idx = match idx {
+            Ok(idx) | Err(idx) => idx,
+        };
+
+        let mappings = if idx < by_original.len() {
+            &by_original[idx..]
+        } else {
+            &[]
+        };
+        let mappings = mappings.iter();
+
+        AllGeneratedLocationsFor {
+            mappings,
+            source,
+            original_line,
+            original_column,
+        }
+    }
 }
 
 impl Default for Mappings {
@@ -227,6 +266,40 @@ impl Default for Mappings {
             by_generated: LazilySorted::Unsorted(vec![]),
             by_original: None,
             computed_column_spans: false,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct AllGeneratedLocationsFor<'a> {
+    mappings: slice::Iter<'a, Mapping>,
+    source: u32,
+    original_line: u32,
+    original_column: Option<u32>,
+}
+
+impl<'a> Iterator for AllGeneratedLocationsFor<'a> {
+    type Item = &'a Mapping;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.mappings.next() {
+            None => None,
+            Some(m) => {
+                let m_orig = m.original().unwrap();
+
+                if m_orig.source() != self.source || m_orig.original_line() != self.original_line {
+                    return None;
+                }
+
+                if let Some(original_column) = self.original_column {
+                    if m_orig.original_column() != original_column {
+                        return None;
+                    }
+                }
+
+                Some(m)
+            }
         }
     }
 }

@@ -4,6 +4,7 @@ extern crate source_map_mappings;
 extern crate vlq;
 
 use quickcheck::{Arbitrary, Gen};
+use source_map_mappings::{Bias, Error};
 use std::cmp::Ordering;
 use std::fmt;
 use std::i64;
@@ -276,13 +277,13 @@ quickcheck! {
         let _ = source_map_mappings::parse_mappings(mappings_string.as_bytes());
     }
 
-    fn parse_valid_mappings(mappings: Mappings<SmallPositives>) -> Result<(), source_map_mappings::Error> {
+    fn parse_valid_mappings(mappings: Mappings<SmallPositives>) -> Result<(), Error> {
         let mappings_string = mappings.to_string();
         source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
         Ok(())
     }
 
-    fn compute_column_spans(mappings: Mappings<SmallPositives>) -> Result<(), source_map_mappings::Error> {
+    fn compute_column_spans(mappings: Mappings<SmallPositives>) -> Result<(), Error> {
         let mappings_string = mappings.to_string();
         let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
 
@@ -308,7 +309,7 @@ quickcheck! {
         line: u32,
         col: u32,
         lub: bool
-    ) -> Result<(), source_map_mappings::Error> {
+    ) -> Result<(), Error> {
         let mappings_string = mappings.to_string();
         let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
         if mappings.by_generated_location().is_empty() {
@@ -323,9 +324,9 @@ quickcheck! {
         let col = col % (max_col + 1);
 
         let bias = if lub {
-            source_map_mappings::Bias::LeastUpperBound
+            Bias::LeastUpperBound
         } else {
-            source_map_mappings::Bias::GreatestLowerBound
+            Bias::GreatestLowerBound
         };
 
         // If we find a mapping, then it should either be an exact match or it
@@ -336,8 +337,8 @@ quickcheck! {
             let found_col = mapping.generated_column();
             match line.cmp(&found_line).then(col.cmp(&found_col)) {
                 Ordering::Equal => {}
-                Ordering::Greater if bias == source_map_mappings::Bias::GreatestLowerBound => {}
-                Ordering::Less if bias == source_map_mappings::Bias::LeastUpperBound => {}
+                Ordering::Greater if bias == Bias::GreatestLowerBound => {}
+                Ordering::Less if bias == Bias::LeastUpperBound => {}
                 _ => panic!(
                     "Found bad location {{ line = {}, col = {} }} when \
                      searching for {{ line = {}, col = {} }} with bias {:?}",
@@ -358,10 +359,10 @@ quickcheck! {
             match m.generated_line().cmp(&line).then(m.generated_column().cmp(&col)) {
                 Ordering::Equal => panic!("found matching mapping when we returned none"),
                 Ordering::Less => {
-                    assert_eq!(bias, source_map_mappings::Bias::LeastUpperBound);
+                    assert_eq!(bias, Bias::LeastUpperBound);
                 }
                 Ordering::Greater => {
-                    assert_eq!(bias, source_map_mappings::Bias::GreatestLowerBound);
+                    assert_eq!(bias, Bias::GreatestLowerBound);
                 }
             }
         }
@@ -371,7 +372,7 @@ quickcheck! {
 
     fn original_mappings_have_original(
         mappings: Mappings<SmallPositives>
-    ) -> Result<bool, source_map_mappings::Error> {
+    ) -> Result<bool, Error> {
         let mappings_string = mappings.to_string();
         let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
         Ok(mappings.by_original_location().iter().all(|m| m.original().is_some()))
@@ -383,7 +384,7 @@ quickcheck! {
         line: u32,
         col: u32,
         lub: bool
-    ) -> Result<(), source_map_mappings::Error> {
+    ) -> Result<(), Error> {
         let mappings_string = mappings.to_string();
         let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
         if mappings.by_original_location().is_empty() {
@@ -412,9 +413,9 @@ quickcheck! {
         let col = col % (max_col + 1);
 
         let bias = if lub {
-            source_map_mappings::Bias::LeastUpperBound
+            Bias::LeastUpperBound
         } else {
-            source_map_mappings::Bias::GreatestLowerBound
+            Bias::GreatestLowerBound
         };
 
         // If we find a mapping, then it should either be an exact match or it
@@ -431,8 +432,8 @@ quickcheck! {
 
             match order {
                 Ordering::Equal => {}
-                Ordering::Greater if bias == source_map_mappings::Bias::GreatestLowerBound => {}
-                Ordering::Less if bias == source_map_mappings::Bias::LeastUpperBound => {}
+                Ordering::Greater if bias == Bias::GreatestLowerBound => {}
+                Ordering::Less if bias == Bias::LeastUpperBound => {}
                 _ => panic!(
                     "Found bad location {{ line = {}, col = {} }} when \
                      searching for {{ line = {}, col = {} }} with bias {:?}",
@@ -462,13 +463,72 @@ quickcheck! {
             match order {
                 Ordering::Equal => panic!("found matching mapping when we returned none"),
                 Ordering::Less => {
-                    assert_eq!(bias, source_map_mappings::Bias::LeastUpperBound);
+                    assert_eq!(bias, Bias::LeastUpperBound);
                 }
                 Ordering::Greater => {
-                    assert_eq!(bias, source_map_mappings::Bias::GreatestLowerBound);
+                    assert_eq!(bias, Bias::GreatestLowerBound);
                 }
             }
         }
+
+        Ok(())
+    }
+
+    fn all_generated_locations_for(
+        mappings: Mappings<SmallPositives>,
+        source: u32,
+        line: u32,
+        col: Option<u32>
+    ) -> Result<(), Error> {
+        let mappings_string = mappings.to_string();
+        let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        if mappings.by_original_location().is_empty() {
+            return Ok(());
+        }
+
+        let mut count = 0;
+        {
+            let locations = mappings.all_generated_locations_for(source, line, col);
+
+            for m in locations {
+                count += 1;
+
+                let m_orig = m.original().unwrap();
+                assert_eq!(
+                    m_orig.original_line(),
+                    line,
+                    "result location's line is our query's line",
+                );
+
+                if let Some(col) = col {
+                    assert_eq!(
+                        m_orig.original_column(),
+                        col,
+                        "result location's column is our query's column",
+                    );
+                }
+            }
+        }
+
+        assert_eq!(
+            count,
+            mappings.by_original_location()
+                .iter()
+                .filter(|m| {
+                    let m_orig = m.original().unwrap();
+                    if m_orig.source() != source || m_orig.original_line() != line {
+                        return false;
+                    }
+                    if let Some(col) = col {
+                        if m_orig.original_column() != col {
+                            return false;
+                        }
+                    }
+                    true
+                })
+                .count(),
+            "the iterator should find the right number of results"
+        );
 
         Ok(())
     }

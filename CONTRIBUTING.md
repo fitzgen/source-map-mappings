@@ -23,13 +23,41 @@ We abide by the [Rust Code of Conduct][coc] and ask that you do as well.
 
 ## Building
 
+To build for the host target (for use with testing):
+
 ```
 $ cargo build
+```
+
+To build for WebAssembly, ensure that you have the `wasm32-unknown-unknown` target:
+
+```
+$ rustup update
+$ rustup target add wasm32-unknown-unknown --toolchain nightly
+```
+
+Then, cross compile to `wasm` via the C API crate:
+
+```
+$ cd source-map-mappings-c-api/
+$ cargo build --release --target wasm32-unknown-unknown
+```
+
+The resulting `wasm` file will be located at
+`source-map-mappings-c-api/target/wasm32-unknown-unknown/release/source_map_mappings.wasm`.
+
+To minimize its size, run `wasm-gc` on it:
+
+```
+$ cargo install wasm-gc # If you don't already have it.
+$ wasm-gc source-map-mappings-c-api/target/wasm32-unknown-unknown/release/source_map_mappings.wasm \\
+    source-map-mappings-c-api/target/wasm32-unknown-unknown/release/source_map_mappings.small.wasm
 ```
 
 ## Testing
 
 The tests require `cargo-readme` to be installed:
+
 ```
 $ cargo install cargo-readme
 ```
