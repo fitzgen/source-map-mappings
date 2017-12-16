@@ -1,4 +1,4 @@
-# source-map-mappings
+# `source-map-mappings`
 
 [![](https://docs.rs/source-map-mappings/badge.svg)](https://docs.rs/source-map-mappings/) [![](https://img.shields.io/crates/v/source-map-mappings.svg)](https://crates.io/crates/source-map-mappings) [![](https://img.shields.io/crates/d/source-map-mappings.png)](https://crates.io/crates/source-map-mappings) [![Build Status](https://travis-ci.org/fitzgen/source-map-mappings.png?branch=master)](https://travis-ci.org/fitzgen/source-map-mappings)
 
@@ -40,5 +40,3 @@ Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
 
-
-License: Apache-2.0/MIT
