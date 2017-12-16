@@ -368,4 +368,108 @@ quickcheck! {
 
         Ok(())
     }
+
+    fn original_mappings_have_original(
+        mappings: Mappings<SmallPositives>
+    ) -> Result<bool, source_map_mappings::Error> {
+        let mappings_string = mappings.to_string();
+        let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        Ok(mappings.by_original_location().iter().all(|m| m.original().is_some()))
+    }
+
+    fn generated_location_for(
+        mappings: Mappings<SmallPositives>,
+        source: u32,
+        line: u32,
+        col: u32,
+        lub: bool
+    ) -> Result<(), source_map_mappings::Error> {
+        let mappings_string = mappings.to_string();
+        let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        if mappings.by_original_location().is_empty() {
+            return Ok(());
+        }
+
+        // To make this more useful, wrap `source`, `line`, and `col` around the
+        // maximums.
+        let max_source = mappings.by_original_location()
+            .iter()
+            .map(|m| m.original().unwrap().source())
+            .max()
+            .unwrap();
+        let max_line = mappings.by_original_location()
+            .iter()
+            .map(|m| m.original().unwrap().original_line())
+            .max()
+            .unwrap();
+        let max_col = mappings.by_original_location()
+            .iter()
+            .map(|m| m.original().unwrap().original_column())
+            .max()
+            .unwrap();
+        let source = source % (max_source + 1);
+        let line = line % (max_line + 1);
+        let col = col % (max_col + 1);
+
+        let bias = if lub {
+            source_map_mappings::Bias::LeastUpperBound
+        } else {
+            source_map_mappings::Bias::GreatestLowerBound
+        };
+
+        // If we find a mapping, then it should either be an exact match or it
+        // should have the proper ordering relation to our query line/column
+        // based on the given bias.
+        if let Some(mapping) = mappings.generated_location_for(source, line, col, bias) {
+            let found_source = mapping.original().unwrap().source();
+            let found_line = mapping.original().unwrap().original_line();
+            let found_col = mapping.original().unwrap().original_column();
+
+            let order = source.cmp(&found_source)
+                .then(line.cmp(&found_line))
+                .then(col.cmp(&found_col));
+
+            match order {
+                Ordering::Equal => {}
+                Ordering::Greater if bias == source_map_mappings::Bias::GreatestLowerBound => {}
+                Ordering::Less if bias == source_map_mappings::Bias::LeastUpperBound => {}
+                _ => panic!(
+                    "Found bad location {{ line = {}, col = {} }} when \
+                     searching for {{ line = {}, col = {} }} with bias {:?}",
+                    found_line,
+                    found_col,
+                    line,
+                    col,
+                    bias
+                ),
+            }
+            return Ok(())
+        }
+
+        // If we didn't get any result, then every mapping should not match our
+        // query, and should additionally be on the opposite side of ordering
+        // from our requested bias.
+        for m in mappings.by_original_location().iter() {
+            let m_orig = m.original().unwrap();
+            let m_source = m_orig.source();
+            let m_line = m_orig.original_line();
+            let m_col = m_orig.original_column();
+
+            let order = m_source.cmp(&source)
+                .then(m_line.cmp(&line))
+                .then(m_col.cmp(&col));
+
+            match order {
+                Ordering::Equal => panic!("found matching mapping when we returned none"),
+                Ordering::Less => {
+                    assert_eq!(bias, source_map_mappings::Bias::LeastUpperBound);
+                }
+                Ordering::Greater => {
+                    assert_eq!(bias, source_map_mappings::Bias::GreatestLowerBound);
+                }
+            }
+        }
+
+        Ok(())
+    }
 }

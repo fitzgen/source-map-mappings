@@ -144,6 +144,37 @@ impl Mappings {
             },
         }
     }
+
+    pub fn generated_location_for(
+        &mut self,
+        source: u32,
+        original_line: u32,
+        original_column: u32,
+        bias: Bias,
+    ) -> Option<&Mapping> {
+        let by_original = self.by_original_location();
+
+        let position = by_original.binary_search_by(|m| {
+            let original = m.original.as_ref().unwrap();
+            original
+                .source
+                .cmp(&source)
+                .then(original.original_line.cmp(&original_line))
+                .then(original.original_column.cmp(&original_column))
+        });
+
+        match position {
+            Ok(idx) => Some(&by_original[idx]),
+            Err(idx) => match bias {
+                Bias::LeastUpperBound => by_original.get(idx),
+                Bias::GreatestLowerBound => if idx == 0 {
+                    None
+                } else {
+                    by_original.get(idx - 1)
+                },
+            },
+        }
+    }
 }
 
 impl Default for Mappings {
@@ -199,6 +230,24 @@ pub struct OriginalLocation {
     original_line: u32,
     original_column: u32,
     name: Option<u32>,
+}
+
+impl OriginalLocation {
+    pub fn source(&self) -> u32 {
+        self.source
+    }
+
+    pub fn original_line(&self) -> u32 {
+        self.original_line
+    }
+
+    pub fn original_column(&self) -> u32 {
+        self.original_column
+    }
+
+    pub fn name(&self) -> Option<u32> {
+        self.name
+    }
 }
 
 #[inline]
