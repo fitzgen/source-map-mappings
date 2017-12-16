@@ -473,4 +473,63 @@ quickcheck! {
 
         Ok(())
     }
+
+    fn all_generated_locations_for(
+        mappings: Mappings<SmallPositives>,
+        source: u32,
+        line: u32,
+        col: Option<u32>
+    ) -> Result<(), Error> {
+        let mappings_string = mappings.to_string();
+        let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        if mappings.by_original_location().is_empty() {
+            return Ok(());
+        }
+
+        let mut count = 0;
+        {
+            let locations = mappings.all_generated_locations_for(source, line, col);
+
+            for m in locations {
+                count += 1;
+
+                let m_orig = m.original().unwrap();
+                assert_eq!(
+                    m_orig.original_line(),
+                    line,
+                    "result location's line is our query's line",
+                );
+
+                if let Some(col) = col {
+                    assert_eq!(
+                        m_orig.original_column(),
+                        col,
+                        "result location's column is our query's column",
+                    );
+                }
+            }
+        }
+
+        assert_eq!(
+            count,
+            mappings.by_original_location()
+                .iter()
+                .filter(|m| {
+                    let m_orig = m.original().unwrap();
+                    if m_orig.source() != source || m_orig.original_line() != line {
+                        return false;
+                    }
+                    if let Some(col) = col {
+                        if m_orig.original_column() != col {
+                            return false;
+                        }
+                    }
+                    true
+                })
+                .count(),
+            "the iterator should find the right number of results"
+        );
+
+        Ok(())
+    }
 }
