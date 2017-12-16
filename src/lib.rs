@@ -136,7 +136,11 @@ impl Mappings {
             Ok(idx) => Some(&by_generated[idx]),
             Err(idx) => match bias {
                 Bias::LeastUpperBound => by_generated.get(idx),
-                Bias::GreatestLowerBound => by_generated.get(idx - 1),
+                Bias::GreatestLowerBound => if idx == 0 {
+                    None
+                } else {
+                    by_generated.get(idx - 1)
+                },
             },
         }
     }
