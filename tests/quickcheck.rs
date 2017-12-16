@@ -4,6 +4,7 @@ extern crate source_map_mappings;
 extern crate vlq;
 
 use quickcheck::{Arbitrary, Gen};
+use std::cmp::Ordering;
 use std::fmt;
 use std::i64;
 use std::iter;
@@ -296,6 +297,72 @@ quickcheck! {
                 assert_eq!(this_mapping.last_generated_column().unwrap(), next_mapping.generated_column());
             } else {
                 assert!(this_mapping.last_generated_column().is_none());
+            }
+        }
+
+        Ok(())
+    }
+
+    fn original_location_for(
+        mappings: Mappings<SmallPositives>,
+        line: u32,
+        col: u32,
+        lub: bool
+    ) -> Result<(), source_map_mappings::Error> {
+        let mappings_string = mappings.to_string();
+        let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        if mappings.by_generated_location().is_empty() {
+            return Ok(());
+        }
+
+        // To make this more useful, wrap `line` and `col` around the maximum
+        // line and column in the mappings respectively.
+        let max_line = mappings.by_generated_location().iter().map(|m| m.generated_line()).max().unwrap();
+        let max_col = mappings.by_generated_location().iter().map(|m| m.generated_column()).max().unwrap();
+        let line = line % (max_line + 1);
+        let col = col % (max_col + 1);
+
+        let bias = if lub {
+            source_map_mappings::Bias::LeastUpperBound
+        } else {
+            source_map_mappings::Bias::GreatestLowerBound
+        };
+
+        // If we find a mapping, then it should either be an exact match or it
+        // should have the proper ordering relation to our query line/column
+        // based on the given bias.
+        if let Some(mapping) = mappings.original_location_for(line, col, bias) {
+            let found_line = mapping.generated_line();
+            let found_col = mapping.generated_column();
+            match line.cmp(&found_line).then(col.cmp(&found_col)) {
+                Ordering::Equal => {}
+                Ordering::Greater if bias == source_map_mappings::Bias::GreatestLowerBound => {}
+                Ordering::Less if bias == source_map_mappings::Bias::LeastUpperBound => {}
+                _ => panic!(
+                    "Found bad location {{ line = {}, col = {} }} when \
+                     searching for {{ line = {}, col = {} }} with bias {:?}",
+                    found_line,
+                    found_col,
+                    line,
+                    col,
+                    bias
+                ),
+            }
+            return Ok(())
+        }
+
+        // If we didn't get any result, then every mapping should not match our
+        // query, and should additionally be on the opposite side of ordering
+        // from our requested bias.
+        for m in mappings.by_generated_location().iter() {
+            match m.generated_line().cmp(&line).then(m.generated_column().cmp(&col)) {
+                Ordering::Equal => panic!("found matching mapping when we returned none"),
+                Ordering::Less => {
+                    assert_eq!(bias, source_map_mappings::Bias::LeastUpperBound);
+                }
+                Ordering::Greater => {
+                    assert_eq!(bias, source_map_mappings::Bias::GreatestLowerBound);
+                }
             }
         }
 

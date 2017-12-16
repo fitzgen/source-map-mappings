@@ -45,6 +45,18 @@ where
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Bias {
+    LeastUpperBound,
+    GreatestLowerBound,
+}
+
+impl Default for Bias {
+    fn default() -> Bias {
+        Bias::GreatestLowerBound
+    }
+}
+
 #[derive(Debug)]
 pub struct Mappings {
     by_generated: LazilySorted<Mapping, comparators::ByGeneratedLocation>,
@@ -104,6 +116,29 @@ impl Mappings {
         by_original.sort_by(<comparators::ByOriginalLocation as ComparatorFunction<_>>::compare);
         self.by_original = Some(by_original);
         self.by_original.as_ref().unwrap()
+    }
+
+    pub fn original_location_for(
+        &mut self,
+        generated_line: u32,
+        generated_column: u32,
+        bias: Bias,
+    ) -> Option<&Mapping> {
+        let by_generated = self.by_generated_location();
+
+        let position = by_generated.binary_search_by(|m| {
+            m.generated_line
+                .cmp(&generated_line)
+                .then(m.generated_column.cmp(&generated_column))
+        });
+
+        match position {
+            Ok(idx) => Some(&by_generated[idx]),
+            Err(idx) => match bias {
+                Bias::LeastUpperBound => by_generated.get(idx),
+                Bias::GreatestLowerBound => by_generated.get(idx - 1),
+            },
+        }
     }
 }
 
