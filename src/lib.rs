@@ -48,6 +48,9 @@ extern crate vlq;
 
 mod comparators;
 
+#[cfg(target_arch = "wasm32")]
+pub mod exports;
+
 use comparators::ComparatorFunction;
 use std::marker::PhantomData;
 use std::mem;
