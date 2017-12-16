@@ -45,6 +45,14 @@ $ cargo build --release --target wasm32-unknown-unknown
 The resulting `wasm` file will be located at
 `target/wasm32-unknown-unknown/release/source_map_mappings.wasm`.
 
+To minimize its size, run `wasm-gc` on it:
+
+```
+$ cargo install wasm-gc # if you don't already have it
+$ wasm-gc target/wasm32-unknown-unknown/release/source_map_mappings.wasm \\
+    target/wasm32-unknown-unknown/release/source_map_mappings.small.wasm
+```
+
 ## Testing
 
 The tests require `cargo-readme` to be installed:
