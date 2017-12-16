@@ -3,15 +3,15 @@ language: rust
 cache: cargo
 
 matrix:
-  - rust:
+  rust:
     - stable
     - beta
     - nightly
-  - env:
+  env:
     - JOB="test"
     - JOB="bench"
     - JOB="wasm"
-  - exclude:
+  exclude:
     - rust: stable
       env: JOB="bench"
     - rust: beta
