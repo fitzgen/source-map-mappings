@@ -54,16 +54,23 @@ use std::mem;
 use std::slice;
 use std::u32;
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
+#[repr(C)]
+#[repr(u32)]
 pub enum Error {
-    UnexpectedNegativeNumber,
-    UnexpectedlyBigNumber,
-    Vlq(vlq::Error),
+    // 0 is reserved for OK.
+    UnexpectedNegativeNumber = 1,
+    UnexpectedlyBigNumber = 2,
+    VlqUnexpectedEof = 3,
+    VlqInvalidBase64 = 4,
 }
 
 impl From<vlq::Error> for Error {
     fn from(e: vlq::Error) -> Error {
-        Error::Vlq(e)
+        match e {
+            vlq::Error::UnexpectedEof => Error::VlqUnexpectedEof,
+            vlq::Error::InvalidBase64(_) => Error::VlqInvalidBase64,
+        }
     }
 }
 
@@ -91,9 +98,11 @@ where
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(C)]
+#[repr(u8)]
 pub enum Bias {
-    LeastUpperBound,
-    GreatestLowerBound,
+    GreatestLowerBound = 1,
+    LeastUpperBound = 2,
 }
 
 impl Default for Bias {
