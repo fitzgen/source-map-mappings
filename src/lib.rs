@@ -77,6 +77,7 @@ pub enum Error {
 }
 
 impl From<vlq::Error> for Error {
+    #[inline]
     fn from(e: vlq::Error) -> Error {
         match e {
             vlq::Error::UnexpectedEof => Error::VlqUnexpectedEof,
@@ -122,6 +123,7 @@ pub enum Bias {
 }
 
 impl Default for Bias {
+    #[inline]
     fn default() -> Bias {
         Bias::GreatestLowerBound
     }
@@ -139,6 +141,7 @@ pub struct Mappings {
 
 impl Mappings {
     /// Get the full set of mappings, ordered by generated location.
+    #[inline]
     pub fn by_generated_location(&mut self) -> &[Mapping] {
         self.by_generated.sort();
         match self.by_generated {
@@ -305,6 +308,7 @@ impl Mappings {
 }
 
 impl Default for Mappings {
+    #[inline]
     fn default() -> Mappings {
         Mappings {
             by_generated: LazilySorted::Unsorted(vec![]),
@@ -365,11 +369,13 @@ pub struct Mapping {
 
 impl Mapping {
     /// The generated line.
+    #[inline]
     pub fn generated_line(&self) -> u32 {
         self.generated_line
     }
 
     /// The generated column.
+    #[inline]
     pub fn generated_column(&self) -> u32 {
         self.generated_column
     }
@@ -381,17 +387,20 @@ impl Mapping {
     /// either contains `Some` column at which the generated location ends
     /// (exclusive), or it contains `None` if it spans until the end of the
     /// generated line.
+    #[inline]
     pub fn last_generated_column(&self) -> Option<u32> {
         self.last_generated_column
     }
 
     /// The original location information, if any.
+    #[inline]
     pub fn original(&self) -> Option<&OriginalLocation> {
         self.original.as_ref()
     }
 }
 
 impl Default for Mapping {
+    #[inline]
     fn default() -> Mapping {
         Mapping {
             generated_line: 0,
@@ -416,21 +425,25 @@ pub struct OriginalLocation {
 
 impl OriginalLocation {
     /// The source filename.
+    #[inline]
     pub fn source(&self) -> u32 {
         self.source
     }
 
     /// The original line.
+    #[inline]
     pub fn original_line(&self) -> u32 {
         self.original_line
     }
 
     /// The original column.
+    #[inline]
     pub fn original_column(&self) -> u32 {
         self.original_column
     }
 
     /// The name, if any.
+    #[inline]
     pub fn name(&self) -> Option<u32> {
         self.name
     }
