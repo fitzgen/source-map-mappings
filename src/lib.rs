@@ -455,7 +455,7 @@ fn is_mapping_separator(byte: u8) -> bool {
 }
 
 #[inline]
-fn read_relative_positive_vlq<B>(previous: &mut u32, input: &mut B) -> Result<(), Error>
+fn read_relative_vlq<B>(previous: &mut u32, input: &mut B) -> Result<(), Error>
 where
     B: Iterator<Item = u8>,
 {
@@ -503,7 +503,7 @@ pub fn parse_mappings(input: &[u8]) -> Result<Mappings, Error> {
                 mapping.generated_line = generated_line;
 
                 // First is a generated column that is always present.
-                read_relative_positive_vlq(&mut generated_column, &mut input)?;
+                read_relative_vlq(&mut generated_column, &mut input)?;
                 mapping.generated_column = generated_column as u32;
 
                 // Read source, original line, and original column if the
@@ -511,9 +511,9 @@ pub fn parse_mappings(input: &[u8]) -> Result<Mappings, Error> {
                 mapping.original = if input.peek().cloned().map_or(true, is_mapping_separator) {
                     None
                 } else {
-                    read_relative_positive_vlq(&mut source, &mut input)?;
-                    read_relative_positive_vlq(&mut original_line, &mut input)?;
-                    read_relative_positive_vlq(&mut original_column, &mut input)?;
+                    read_relative_vlq(&mut source, &mut input)?;
+                    read_relative_vlq(&mut original_line, &mut input)?;
+                    read_relative_vlq(&mut original_column, &mut input)?;
 
                     Some(OriginalLocation {
                         source: source,
@@ -522,7 +522,7 @@ pub fn parse_mappings(input: &[u8]) -> Result<Mappings, Error> {
                         name: if input.peek().cloned().map_or(true, is_mapping_separator) {
                             None
                         } else {
-                            read_relative_positive_vlq(&mut name, &mut input)?;
+                            read_relative_vlq(&mut name, &mut input)?;
                             Some(name)
                         },
                     })
