@@ -112,7 +112,7 @@ where
 /// mapping from the queried location.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
-#[repr(u8)]
+#[repr(u32)]
 pub enum Bias {
     /// Slide to the next smaller mapping.
     GreatestLowerBound = 1,

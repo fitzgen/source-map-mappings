@@ -281,7 +281,7 @@ pub extern "C" fn by_original_location(mappings: *mut Mappings) {
 }
 
 #[inline]
-fn byte_to_bias(bias: u8) -> Bias {
+fn byte_to_bias(bias: u32) -> Bias {
     match bias {
         1 => Bias::GreatestLowerBound,
         2 => Bias::LeastUpperBound,
@@ -289,8 +289,8 @@ fn byte_to_bias(bias: u8) -> Bias {
             "Invalid `Bias = {}`; must be `Bias::GreatestLowerBound = {}` or \
              `Bias::LeastUpperBound = {}`",
             otherwise,
-            Bias::GreatestLowerBound as u8,
-            Bias::LeastUpperBound as u8,
+            Bias::GreatestLowerBound as u32,
+            Bias::LeastUpperBound as u32,
         ),
     }
 }
@@ -304,7 +304,7 @@ pub extern "C" fn original_location_for(
     mappings: *mut Mappings,
     generated_line: u32,
     generated_column: u32,
-    bias: u8,
+    bias: u32,
 ) {
     let this_scope = ();
     let mappings = unsafe { mappings_mut(&this_scope, mappings) };
@@ -327,7 +327,7 @@ pub extern "C" fn generated_location_for(
     source: u32,
     original_line: u32,
     original_column: u32,
-    bias: u8,
+    bias: u32,
 ) {
     let this_scope = ();
     let mappings = unsafe { mappings_mut(&this_scope, mappings) };
