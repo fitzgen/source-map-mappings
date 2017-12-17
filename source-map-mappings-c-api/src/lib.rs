@@ -1,6 +1,27 @@
-//! The public JS API to the `source-map-mappings` library.
+//! The public JS API to the `source-map-mappings` crate.
 //!
-//! Every exported function must be `#[no_mangle]` and `pub extern "C"`.
+//! ## Usage
+//!
+//! 1. Instantiate the WebAssembly module, supplying a JS implementation of
+//! `mapping_callback`.
+//!
+//! 2. Allocate space for the mappings string with `allocate_mappings`.
+//!
+//! 3. Initialize the mappings string by copying the JS `String`'s data into it.
+//!
+//! 4. Parse the mappings with `parse_mappings`. Handle errors, if any.
+//!
+//! 5. Query the resulting `Mappings` structure as needed with
+//! `by_generated_location`, `by_original_location`, `compute_column_spans`,
+//! `original_location_for`, `generated_location_for`, and
+//! `all_generated_locations_for` as needed.
+//!
+//! 6. When finished with `Mappings` structure, dispose of it with
+//! `free_mappings`.
+
+// NB: every exported function must be `#[no_mangle]` and `pub extern "C"`.
+
+#![deny(missing_docs)]
 
 extern crate source_map_mappings;
 
@@ -14,6 +35,9 @@ thread_local! {
     static LAST_ERROR: Cell<Option<Error>> = Cell::new(None);
 }
 
+/// Get the last error's error code, or 0 if there was none.
+///
+/// See `source_map_mappings::Error` for the error code definitions.
 #[no_mangle]
 pub extern "C" fn get_last_error() -> u32 {
     match LAST_ERROR.with(|last_error| last_error.get()) {
@@ -29,6 +53,11 @@ fn assert_pointer_is_word_aligned(p: *mut u8) {
 
 // TODO: factor out allocation into its own wasm-allocator crate.
 
+/// Allocate space for a mappings string of the given size (in bytes).
+///
+/// It is the JS callers responsibility to initialize the resulting buffer by
+/// copying the JS `String` holding the source map's "mappings" into it (encoded
+/// in ascii).
 #[no_mangle]
 pub extern "C" fn allocate_mappings(size: usize) -> *mut u8 {
     // Make sure that we don't lose any bytes from size in the remainder.
@@ -63,6 +92,18 @@ where
     reference
 }
 
+/// Parse the given initialized mappings string into a `Mappings` structure.
+///
+/// Returns `NULL` on failure, or a pointer to the parsed `Mappings` structure
+/// on success.
+///
+/// In the case of failure, the error can be retrieved with `get_last_error`.
+///
+/// In the case of success, the caller takes ownership of the result, and must
+/// call `free_mappings` to destroy it when finished.
+///
+/// In both the success or failure cases, the caller gives up ownership of the
+/// input mappings string and must not use it again.
 #[no_mangle]
 pub extern "C" fn parse_mappings(mappings: *mut u8) -> *mut Mappings {
     assert_pointer_is_word_aligned(mappings);
@@ -102,6 +143,9 @@ pub extern "C" fn parse_mappings(mappings: *mut u8) -> *mut Mappings {
     }
 }
 
+/// Destroy the given `Mappings` structure.
+///
+/// The caller gives up ownership of the mappings and must not use them again.
 #[no_mangle]
 pub extern "C" fn free_mappings(mappings: *mut Mappings) {
     unsafe {
@@ -114,8 +158,32 @@ unsafe fn mappings_mut<'a>(_scope: &'a (), mappings: *mut Mappings) -> &'a mut M
     mappings.as_mut().unwrap()
 }
 
+extern "C" {
+    fn mapping_callback(
+        // These two parameters are always valid.
+        generated_line: u32,
+        generated_column: u32,
+
+        // The `last_generated_column` parameter is only valid if
+        // `has_last_generated_column` is `true`.
+        has_last_generated_column: bool,
+        last_generated_column: u32,
+
+        // The `source`, `original_line`, and `original_column` parameters are
+        // only valid if `has_original` is `true`.
+        has_original: bool,
+        source: u32,
+        original_line: u32,
+        original_column: u32,
+
+        // The `name` parameter is only valid if `has_name` is `true`.
+        has_name: bool,
+        name: u32,
+    );
+}
+
 #[inline]
-fn mapping_to_parts(mapping: &Mapping) -> (u32, u32, bool, u32, bool, u32, u32, u32, bool, u32) {
+unsafe fn invoke_mapping_callback(mapping: &Mapping) {
     let generated_line = mapping.generated_line();
     let generated_column = mapping.generated_column();
 
@@ -164,59 +232,6 @@ fn mapping_to_parts(mapping: &Mapping) -> (u32, u32, bool, u32, bool, u32, u32, 
         )
     };
 
-    (
-        generated_line,
-        generated_column,
-        has_last_generated_column,
-        last_generated_column,
-        has_original,
-        source,
-        original_line,
-        original_column,
-        has_name,
-        name,
-    )
-}
-
-extern "C" {
-    fn mapping_callback(
-        // These two parameters are always valid.
-        generated_line: u32,
-        generated_column: u32,
-
-        // The `last_generated_column` parameter is only valid if
-        // `has_last_generated_column` is `true`.
-        has_last_generated_column: bool,
-        last_generated_column: u32,
-
-        // The `source`, `original_line`, and `original_column` parameters are
-        // only valid if `has_original` is `true`.
-        has_original: bool,
-        source: u32,
-        original_line: u32,
-        original_column: u32,
-
-        // The `name` parameter is only valid if `has_name` is `true`.
-        has_name: bool,
-        name: u32,
-    );
-}
-
-#[inline]
-unsafe fn invoke_mapping_callback(mapping: &Mapping) {
-    let (
-        generated_line,
-        generated_column,
-        has_last_generated_column,
-        last_generated_column,
-        has_original,
-        source,
-        original_line,
-        original_column,
-        has_name,
-        name,
-    ) = mapping_to_parts(mapping);
-
     mapping_callback(
         generated_line,
         generated_column,
@@ -231,6 +246,8 @@ unsafe fn invoke_mapping_callback(mapping: &Mapping) {
     );
 }
 
+/// Invoke the `mapping_callback` on each mapping in the given `Mappings`
+/// structure, in order of generated location.
 #[no_mangle]
 pub extern "C" fn by_generated_location(mappings: *mut Mappings) {
     let this_scope = ();
@@ -241,6 +258,7 @@ pub extern "C" fn by_generated_location(mappings: *mut Mappings) {
     });
 }
 
+/// Compute column spans for the given mappings.
 #[no_mangle]
 pub extern "C" fn compute_column_spans(mappings: *mut Mappings) {
     let this_scope = ();
@@ -249,6 +267,9 @@ pub extern "C" fn compute_column_spans(mappings: *mut Mappings) {
     mappings.compute_column_spans();
 }
 
+/// Invoke the `mapping_callback` on each mapping in the given `Mappings`
+/// structure that has original location information, in order of original
+/// location.
 #[no_mangle]
 pub extern "C" fn by_original_location(mappings: *mut Mappings) {
     let this_scope = ();
@@ -274,6 +295,10 @@ fn byte_to_bias(bias: u8) -> Bias {
     }
 }
 
+/// Find the mapping for the given generated location, if any exists.
+///
+/// If a mapping is found, the `mapping_callback` is invoked with it
+/// once. Otherwise, the `mapping_callback` is not invoked at all.
 #[no_mangle]
 pub extern "C" fn original_location_for(
     mappings: *mut Mappings,
@@ -292,6 +317,10 @@ pub extern "C" fn original_location_for(
     }
 }
 
+/// Find the mapping for the given original location, if any exists.
+///
+/// If a mapping is found, the `mapping_callback` is invoked with it
+/// once. Otherwise, the `mapping_callback` is not invoked at all.
 #[no_mangle]
 pub extern "C" fn generated_location_for(
     mappings: *mut Mappings,
@@ -311,6 +340,15 @@ pub extern "C" fn generated_location_for(
     }
 }
 
+/// Find all mappings for the given original location, and invoke the
+/// `mapping_callback` on each of them.
+///
+/// If `has_original_column` is `true`, then the `mapping_callback` is only
+/// invoked with mappings with matching source and original line **and**
+/// original column is equal to `original_column`. If `has_original_column` is
+/// `false`, then the `original_column` argument is ignored, and the
+/// `mapping_callback` is invoked on all mappings with matching source and
+/// original line.
 #[no_mangle]
 pub extern "C" fn all_generated_locations_for(
     mappings: *mut Mappings,
