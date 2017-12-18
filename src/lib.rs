@@ -43,6 +43,7 @@ dual licensed as above, without any additional terms or conditions.
  */
 
 #![deny(missing_debug_implementations)]
+#![deny(missing_docs)]
 
 extern crate vlq;
 
@@ -54,16 +55,34 @@ use std::mem;
 use std::slice;
 use std::u32;
 
-#[derive(Debug)]
+/// Errors that can occur during parsing.
+#[derive(Copy, Clone, Debug)]
+#[repr(C)]
+#[repr(u32)]
 pub enum Error {
-    UnexpectedNegativeNumber,
-    UnexpectedlyBigNumber,
-    Vlq(vlq::Error),
+    // NB: 0 is reserved for OK.
+
+    /// The mappings contained a negative line, column, source index, or name
+    /// index.
+    UnexpectedNegativeNumber = 1,
+
+    /// The mappings contained a number larger than `u32::MAX`.
+    UnexpectedlyBigNumber = 2,
+
+    /// Reached EOF while in the middle of parsing a VLQ.
+    VlqUnexpectedEof = 3,
+
+    /// Encountered an invalid base 64 character while parsing a VLQ.
+    VlqInvalidBase64 = 4,
 }
 
 impl From<vlq::Error> for Error {
+    #[inline]
     fn from(e: vlq::Error) -> Error {
-        Error::Vlq(e)
+        match e {
+            vlq::Error::UnexpectedEof => Error::VlqUnexpectedEof,
+            vlq::Error::InvalidBase64(_) => Error::VlqInvalidBase64,
+        }
     }
 }
 
@@ -90,18 +109,29 @@ where
     }
 }
 
+/// When doing fuzzy searching, whether to slide the next larger or next smaller
+/// mapping from the queried location.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(C)]
+#[repr(u32)]
 pub enum Bias {
-    LeastUpperBound,
-    GreatestLowerBound,
+    /// Slide to the next smaller mapping.
+    GreatestLowerBound = 1,
+
+    /// Slide to the next larger mapping.
+    LeastUpperBound = 2,
 }
 
 impl Default for Bias {
+    #[inline]
     fn default() -> Bias {
         Bias::GreatestLowerBound
     }
 }
 
+/// A parsed set of mappings that can be queried.
+///
+/// Constructed via `parse_mappings`.
 #[derive(Debug)]
 pub struct Mappings {
     by_generated: LazilySorted<Mapping, comparators::ByGeneratedLocation>,
@@ -110,6 +140,8 @@ pub struct Mappings {
 }
 
 impl Mappings {
+    /// Get the full set of mappings, ordered by generated location.
+    #[inline]
     pub fn by_generated_location(&mut self) -> &[Mapping] {
         self.by_generated.sort();
         match self.by_generated {
@@ -118,6 +150,11 @@ impl Mappings {
         }
     }
 
+    /// Compute the last generated column of each mapping.
+    ///
+    /// After this method has been called, any mappings with
+    /// `last_generated_column == None` means that the mapping spans to the end
+    /// of the line.
     pub fn compute_column_spans(&mut self) {
         if self.computed_column_spans {
             return;
@@ -141,6 +178,8 @@ impl Mappings {
         self.computed_column_spans = true;
     }
 
+    /// Get the set of mappings that have original location information, ordered
+    /// by original location.
     pub fn by_original_location(&mut self) -> &[Mapping] {
         if let Some(ref by_original) = self.by_original {
             return by_original;
@@ -163,6 +202,7 @@ impl Mappings {
         self.by_original.as_ref().unwrap()
     }
 
+    /// Get the mapping closest to the given generated location, if any exists.
     pub fn original_location_for(
         &mut self,
         generated_line: u32,
@@ -190,6 +230,7 @@ impl Mappings {
         }
     }
 
+    /// Get the mapping closest to the given original location, if any exists.
     pub fn generated_location_for(
         &mut self,
         source: u32,
@@ -221,6 +262,12 @@ impl Mappings {
         }
     }
 
+    /// Get all mappings at the given original location.
+    ///
+    /// If `original_column` is `None`, get all mappings on the given source and
+    /// original line regardless what columns they have. If `original_column` is
+    /// `Some`, only return mappings for which all of source, original line, and
+    /// original column match.
     pub fn all_generated_locations_for(
         &mut self,
         source: u32,
@@ -261,6 +308,7 @@ impl Mappings {
 }
 
 impl Default for Mappings {
+    #[inline]
     fn default() -> Mappings {
         Mappings {
             by_generated: LazilySorted::Unsorted(vec![]),
@@ -270,6 +318,7 @@ impl Default for Mappings {
     }
 }
 
+/// An iterator returned by `Mappings::all_generated_locations_for`.
 #[derive(Debug)]
 pub struct AllGeneratedLocationsFor<'a> {
     mappings: slice::Iter<'a, Mapping>,
@@ -304,6 +353,12 @@ impl<'a> Iterator for AllGeneratedLocationsFor<'a> {
     }
 }
 
+/// A single bidirectional mapping.
+///
+/// Always contains generated location information.
+///
+/// Might contain original location information, and if so, might also have an
+/// associated name.
 #[derive(Clone, Debug)]
 pub struct Mapping {
     generated_line: u32,
@@ -313,24 +368,39 @@ pub struct Mapping {
 }
 
 impl Mapping {
+    /// The generated line.
+    #[inline]
     pub fn generated_line(&self) -> u32 {
         self.generated_line
     }
 
+    /// The generated column.
+    #[inline]
     pub fn generated_column(&self) -> u32 {
         self.generated_column
     }
 
+    /// The end column of this mapping's generated location span.
+    ///
+    /// Before `Mappings::computed_column_spans` has been called, this is always
+    /// `None`. After `Mappings::computed_column_spans` has been called, it
+    /// either contains `Some` column at which the generated location ends
+    /// (exclusive), or it contains `None` if it spans until the end of the
+    /// generated line.
+    #[inline]
     pub fn last_generated_column(&self) -> Option<u32> {
         self.last_generated_column
     }
 
+    /// The original location information, if any.
+    #[inline]
     pub fn original(&self) -> Option<&OriginalLocation> {
         self.original.as_ref()
     }
 }
 
 impl Default for Mapping {
+    #[inline]
     fn default() -> Mapping {
         Mapping {
             generated_line: 0,
@@ -341,6 +411,10 @@ impl Default for Mapping {
     }
 }
 
+/// Original location information within a mapping.
+///
+/// Contains a source filename, an original line, and an original column. Might
+/// also contain an associated name.
 #[derive(Clone, Debug)]
 pub struct OriginalLocation {
     source: u32,
@@ -350,18 +424,26 @@ pub struct OriginalLocation {
 }
 
 impl OriginalLocation {
+    /// The source filename.
+    #[inline]
     pub fn source(&self) -> u32 {
         self.source
     }
 
+    /// The original line.
+    #[inline]
     pub fn original_line(&self) -> u32 {
         self.original_line
     }
 
+    /// The original column.
+    #[inline]
     pub fn original_column(&self) -> u32 {
         self.original_column
     }
 
+    /// The name, if any.
+    #[inline]
     pub fn name(&self) -> Option<u32> {
         self.name
     }
@@ -373,7 +455,7 @@ fn is_mapping_separator(byte: u8) -> bool {
 }
 
 #[inline]
-fn read_relative_positive_vlq<B>(previous: &mut u32, input: &mut B) -> Result<(), Error>
+fn read_relative_vlq<B>(previous: &mut u32, input: &mut B) -> Result<(), Error>
 where
     B: Iterator<Item = u8>,
 {
@@ -391,6 +473,8 @@ where
     Ok(())
 }
 
+/// Parse a source map's `"mappings"` string into a queryable `Mappings`
+/// structure.
 pub fn parse_mappings(input: &[u8]) -> Result<Mappings, Error> {
     let mut generated_line = 0;
     let mut generated_column = 0;
@@ -419,7 +503,7 @@ pub fn parse_mappings(input: &[u8]) -> Result<Mappings, Error> {
                 mapping.generated_line = generated_line;
 
                 // First is a generated column that is always present.
-                read_relative_positive_vlq(&mut generated_column, &mut input)?;
+                read_relative_vlq(&mut generated_column, &mut input)?;
                 mapping.generated_column = generated_column as u32;
 
                 // Read source, original line, and original column if the
@@ -427,9 +511,9 @@ pub fn parse_mappings(input: &[u8]) -> Result<Mappings, Error> {
                 mapping.original = if input.peek().cloned().map_or(true, is_mapping_separator) {
                     None
                 } else {
-                    read_relative_positive_vlq(&mut source, &mut input)?;
-                    read_relative_positive_vlq(&mut original_line, &mut input)?;
-                    read_relative_positive_vlq(&mut original_column, &mut input)?;
+                    read_relative_vlq(&mut source, &mut input)?;
+                    read_relative_vlq(&mut original_line, &mut input)?;
+                    read_relative_vlq(&mut original_column, &mut input)?;
 
                     Some(OriginalLocation {
                         source: source,
@@ -438,7 +522,7 @@ pub fn parse_mappings(input: &[u8]) -> Result<Mappings, Error> {
                         name: if input.peek().cloned().map_or(true, is_mapping_separator) {
                             None
                         } else {
-                            read_relative_positive_vlq(&mut name, &mut input)?;
+                            read_relative_vlq(&mut name, &mut input)?;
                             Some(name)
                         },
                     })
