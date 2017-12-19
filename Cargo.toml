@@ -1,5 +1,6 @@
 [package]
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>", "Tom Tromey <tom@tromey.com>"]
+categories = ["development-tools::debugging", "parser-implementations"]
 description = "Parse the `mappings` string from a source map."
 keywords = ["sourcemap", "source", "map", "vlq"]
 license = "Apache-2.0/MIT"

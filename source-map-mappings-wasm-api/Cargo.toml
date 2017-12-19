@@ -1,0 +1,17 @@
+[package]
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>", "Tom Tromey <tom@tromey.com>"]
+description = "Exported WebAssembly API for the `source-map-mappings` crate."
+license = "Apache-2.0/MIT"
+name = "source-map-mappings-wasm-api"
+readme = "../README.md"
+repository = "https://github.com/fitzgen/source-map-mappings"
+version = "0.1.0"
+
+[badges.travis-ci]
+repository = "fitzgen/source-map-mappings"
+
+[dependencies]
+source-map-mappings = { version = "0.1.0", path = ".." }
+
+[lib]
+crate-type = ["cdylib"]
