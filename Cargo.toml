@@ -17,3 +17,6 @@ vlq = "0.3"
 
 [dev-dependencies]
 quickcheck = "0.5.0"
+
+[profile.release]
+debug = true

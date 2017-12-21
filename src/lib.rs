@@ -49,6 +49,7 @@ extern crate vlq;
 
 mod comparators;
 
+use std::cmp;
 use comparators::ComparatorFunction;
 use std::marker::PhantomData;
 use std::mem;
@@ -101,7 +102,7 @@ where
         let items = match me {
             LazilySorted::Sorted(items, _) => items,
             LazilySorted::Unsorted(mut items) => {
-                items.sort_unstable_by(F::compare);
+                items.sort_by(F::compare);
                 items
             }
         };
@@ -278,25 +279,48 @@ impl Mappings {
 
         let by_original = self.by_original_location();
 
-        let idx = by_original.binary_search_by(|m| {
-            let original = m.original.as_ref().unwrap();
+        let compare = |m: &Mapping| {
+            let original: &OriginalLocation = m.original.as_ref().unwrap();
             original
                 .source
                 .cmp(&source)
                 .then(original.original_line.cmp(&original_line))
                 .then(original.original_column.cmp(&query_column))
-        });
+        };
 
-        let idx = match idx {
+        let idx = by_original.binary_search_by(&compare);
+        let mut idx = match idx {
             Ok(idx) | Err(idx) => idx,
         };
 
-        let mappings = if idx < by_original.len() {
-            &by_original[idx..]
+        // If there are multiple mappings for this original location, the binary
+        // search gives no guarantees that this is the index for the first of
+        // them, so back up to the first.
+        while idx > 0 && compare(&by_original[idx - 1]) == cmp::Ordering::Equal {
+            idx -= 1;
+        }
+
+        let (mappings, original_line, original_column) = if idx < by_original.len() {
+            let orig = by_original[idx].original.as_ref().unwrap();
+            let mappings = by_original[idx..].iter();
+
+            // Fuzzy line matching only happens when we don't have a column.
+            let original_line = if original_column.is_some() {
+                original_line
+            } else {
+                orig.original_line
+            };
+
+            let original_column = if original_column.is_some() {
+                Some(orig.original_column)
+            } else {
+                None
+            };
+
+            (mappings, original_line, original_column)
         } else {
-            &[]
+            ([].iter(), original_line, original_column)
         };
-        let mappings = mappings.iter();
 
         AllGeneratedLocationsFor {
             mappings,
@@ -335,14 +359,14 @@ impl<'a> Iterator for AllGeneratedLocationsFor<'a> {
         match self.mappings.next() {
             None => None,
             Some(m) => {
-                let m_orig = m.original().unwrap();
+                let m_orig = m.original.as_ref().unwrap();
 
-                if m_orig.source() != self.source || m_orig.original_line() != self.original_line {
+                if m_orig.source != self.source || m_orig.original_line != self.original_line {
                     return None;
                 }
 
                 if let Some(original_column) = self.original_column {
-                    if m_orig.original_column() != original_column {
+                    if m_orig.original_column != original_column {
                         return None;
                     }
                 }
@@ -359,26 +383,13 @@ impl<'a> Iterator for AllGeneratedLocationsFor<'a> {
 ///
 /// Might contain original location information, and if so, might also have an
 /// associated name.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Mapping {
-    generated_line: u32,
-    generated_column: u32,
-    last_generated_column: Option<u32>,
-    original: Option<OriginalLocation>,
-}
-
-impl Mapping {
     /// The generated line.
-    #[inline]
-    pub fn generated_line(&self) -> u32 {
-        self.generated_line
-    }
+    pub generated_line: u32,
 
     /// The generated column.
-    #[inline]
-    pub fn generated_column(&self) -> u32 {
-        self.generated_column
-    }
+    pub generated_column: u32,
 
     /// The end column of this mapping's generated location span.
     ///
@@ -387,16 +398,10 @@ impl Mapping {
     /// either contains `Some` column at which the generated location ends
     /// (exclusive), or it contains `None` if it spans until the end of the
     /// generated line.
-    #[inline]
-    pub fn last_generated_column(&self) -> Option<u32> {
-        self.last_generated_column
-    }
+    pub last_generated_column: Option<u32>,
 
     /// The original location information, if any.
-    #[inline]
-    pub fn original(&self) -> Option<&OriginalLocation> {
-        self.original.as_ref()
-    }
+    pub original: Option<OriginalLocation>,
 }
 
 impl Default for Mapping {
@@ -415,38 +420,19 @@ impl Default for Mapping {
 ///
 /// Contains a source filename, an original line, and an original column. Might
 /// also contain an associated name.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OriginalLocation {
-    source: u32,
-    original_line: u32,
-    original_column: u32,
-    name: Option<u32>,
-}
-
-impl OriginalLocation {
     /// The source filename.
-    #[inline]
-    pub fn source(&self) -> u32 {
-        self.source
-    }
+    pub source: u32,
 
     /// The original line.
-    #[inline]
-    pub fn original_line(&self) -> u32 {
-        self.original_line
-    }
+    pub original_line: u32,
 
     /// The original column.
-    #[inline]
-    pub fn original_column(&self) -> u32 {
-        self.original_column
-    }
+    pub original_column: u32,
 
-    /// The name, if any.
-    #[inline]
-    pub fn name(&self) -> Option<u32> {
-        self.name
-    }
+    /// The associated name, if any.
+    pub name: Option<u32>,
 }
 
 #[inline]

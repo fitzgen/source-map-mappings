@@ -294,10 +294,10 @@ quickcheck! {
         for window in mappings.by_generated_location().windows(2) {
             let this_mapping = &window[0];
             let next_mapping = &window[1];
-            if this_mapping.generated_line() == next_mapping.generated_line() {
-                assert_eq!(this_mapping.last_generated_column().unwrap(), next_mapping.generated_column());
+            if this_mapping.generated_line == next_mapping.generated_line {
+                assert_eq!(this_mapping.last_generated_column.unwrap(), next_mapping.generated_column);
             } else {
-                assert!(this_mapping.last_generated_column().is_none());
+                assert!(this_mapping.last_generated_column.is_none());
             }
         }
 
@@ -318,8 +318,8 @@ quickcheck! {
 
         // To make this more useful, wrap `line` and `col` around the maximum
         // line and column in the mappings respectively.
-        let max_line = mappings.by_generated_location().iter().map(|m| m.generated_line()).max().unwrap();
-        let max_col = mappings.by_generated_location().iter().map(|m| m.generated_column()).max().unwrap();
+        let max_line = mappings.by_generated_location().iter().map(|m| m.generated_line).max().unwrap();
+        let max_col = mappings.by_generated_location().iter().map(|m| m.generated_column).max().unwrap();
         let line = line % (max_line + 1);
         let col = col % (max_col + 1);
 
@@ -333,8 +333,8 @@ quickcheck! {
         // should have the proper ordering relation to our query line/column
         // based on the given bias.
         if let Some(mapping) = mappings.original_location_for(line, col, bias) {
-            let found_line = mapping.generated_line();
-            let found_col = mapping.generated_column();
+            let found_line = mapping.generated_line;
+            let found_col = mapping.generated_column;
             match line.cmp(&found_line).then(col.cmp(&found_col)) {
                 Ordering::Equal => {}
                 Ordering::Greater if bias == Bias::GreatestLowerBound => {}
@@ -356,7 +356,7 @@ quickcheck! {
         // query, and should additionally be on the opposite side of ordering
         // from our requested bias.
         for m in mappings.by_generated_location().iter() {
-            match m.generated_line().cmp(&line).then(m.generated_column().cmp(&col)) {
+            match m.generated_line.cmp(&line).then(m.generated_column.cmp(&col)) {
                 Ordering::Equal => panic!("found matching mapping when we returned none"),
                 Ordering::Less => {
                     assert_eq!(bias, Bias::LeastUpperBound);
@@ -375,7 +375,7 @@ quickcheck! {
     ) -> Result<bool, Error> {
         let mappings_string = mappings.to_string();
         let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
-        Ok(mappings.by_original_location().iter().all(|m| m.original().is_some()))
+        Ok(mappings.by_original_location().iter().all(|m| m.original.as_ref().is_some()))
     }
 
     fn generated_location_for(
@@ -395,17 +395,17 @@ quickcheck! {
         // maximums.
         let max_source = mappings.by_original_location()
             .iter()
-            .map(|m| m.original().unwrap().source())
+            .map(|m| m.original.as_ref().unwrap().source)
             .max()
             .unwrap();
         let max_line = mappings.by_original_location()
             .iter()
-            .map(|m| m.original().unwrap().original_line())
+            .map(|m| m.original.as_ref().unwrap().original_line)
             .max()
             .unwrap();
         let max_col = mappings.by_original_location()
             .iter()
-            .map(|m| m.original().unwrap().original_column())
+            .map(|m| m.original.as_ref().unwrap().original_column)
             .max()
             .unwrap();
         let source = source % (max_source + 1);
@@ -422,9 +422,9 @@ quickcheck! {
         // should have the proper ordering relation to our query line/column
         // based on the given bias.
         if let Some(mapping) = mappings.generated_location_for(source, line, col, bias) {
-            let found_source = mapping.original().unwrap().source();
-            let found_line = mapping.original().unwrap().original_line();
-            let found_col = mapping.original().unwrap().original_column();
+            let found_source = mapping.original.as_ref().unwrap().source;
+            let found_line = mapping.original.as_ref().unwrap().original_line;
+            let found_col = mapping.original.as_ref().unwrap().original_column;
 
             let order = source.cmp(&found_source)
                 .then(line.cmp(&found_line))
@@ -451,10 +451,10 @@ quickcheck! {
         // query, and should additionally be on the opposite side of ordering
         // from our requested bias.
         for m in mappings.by_original_location().iter() {
-            let m_orig = m.original().unwrap();
-            let m_source = m_orig.source();
-            let m_line = m_orig.original_line();
-            let m_col = m_orig.original_column();
+            let m_orig = m.original.as_ref().unwrap();
+            let m_source = m_orig.source;
+            let m_line = m_orig.original_line;
+            let m_col = m_orig.original_column;
 
             let order = m_source.cmp(&source)
                 .then(m_line.cmp(&line))
@@ -486,23 +486,63 @@ quickcheck! {
             return Ok(());
         }
 
+        let max_source = mappings.by_original_location()
+            .iter()
+            .map(|m| m.original.as_ref().unwrap().source)
+            .max()
+            .unwrap();
+        let max_line = mappings.by_original_location()
+            .iter()
+            .map(|m| m.original.as_ref().unwrap().original_line)
+            .max()
+            .unwrap();
+        let max_col = mappings.by_original_location()
+            .iter()
+            .map(|m| m.original.as_ref().unwrap().original_column)
+            .max()
+            .unwrap();
+        let source = source % (max_source + 1);
+        let mut line = line % (max_line + 1);
+        let mut col = if let Some(col) = col {
+            Some(col % (max_col + 1))
+        } else {
+            None
+        };
+
         let mut count = 0;
         {
             let locations = mappings.all_generated_locations_for(source, line, col);
 
-            for m in locations {
+            for (idx, m) in locations.into_iter().enumerate() {
                 count += 1;
 
-                let m_orig = m.original().unwrap();
+                let m_orig = m.original.as_ref().unwrap();
+
+                // `all_generated_locations_for` does fuzzy searching: it will
+                // slide down to the next original line if there are no mappings
+                // on the queried line. Ditto for columns. This is to match
+                // mozilla/source-map's behavior.
+                if idx == 0 {
+                    if m_orig.original_line != line {
+                        assert!(m_orig.original_line > line);
+                        line = m_orig.original_line;
+                    }
+                    if let Some(c) = col {
+                        if c != m_orig.original_column {
+                            col = Some(m_orig.original_column);
+                        }
+                    }
+                }
+
                 assert_eq!(
-                    m_orig.original_line(),
+                    m_orig.original_line,
                     line,
                     "result location's line is our query's line",
                 );
 
                 if let Some(col) = col {
                     assert_eq!(
-                        m_orig.original_column(),
+                        m_orig.original_column,
                         col,
                         "result location's column is our query's column",
                     );
@@ -515,12 +555,12 @@ quickcheck! {
             mappings.by_original_location()
                 .iter()
                 .filter(|m| {
-                    let m_orig = m.original().unwrap();
-                    if m_orig.source() != source || m_orig.original_line() != line {
+                    let m_orig = m.original.as_ref().unwrap();
+                    if m_orig.source != source || m_orig.original_line != line {
                         return false;
                     }
                     if let Some(col) = col {
-                        if m_orig.original_column() != col {
+                        if m_orig.original_column != col {
                             return false;
                         }
                     }
