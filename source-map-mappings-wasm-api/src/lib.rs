@@ -184,13 +184,13 @@ extern "C" {
 
 #[inline]
 unsafe fn invoke_mapping_callback(mapping: &Mapping) {
-    let generated_line = mapping.generated_line();
-    let generated_column = mapping.generated_column();
+    let generated_line = mapping.generated_line;
+    let generated_column = mapping.generated_column;
 
     let (
         has_last_generated_column,
         last_generated_column,
-    ) = if let Some(last_generated_column) = mapping.last_generated_column() {
+    ) = if let Some(last_generated_column) = mapping.last_generated_column {
         (true, last_generated_column)
     } else {
         (false, 0)
@@ -203,11 +203,11 @@ unsafe fn invoke_mapping_callback(mapping: &Mapping) {
         original_column,
         has_name,
         name,
-    ) = if let Some(original) = mapping.original() {
+    ) = if let Some(original) = mapping.original.as_ref() {
         let (
             has_name,
             name,
-        ) = if let Some(name) = original.name() {
+        ) = if let Some(name) = original.name {
             (true, name)
         } else {
             (false, 0)
@@ -215,9 +215,9 @@ unsafe fn invoke_mapping_callback(mapping: &Mapping) {
 
         (
             true,
-            original.source(),
-            original.original_line(),
-            original.original_column(),
+            original.source,
+            original.original_line,
+            original.original_column,
             has_name,
             name,
         )
