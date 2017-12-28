@@ -116,6 +116,9 @@ where
 #[repr(C)]
 #[repr(u32)]
 pub enum Bias {
+    // XXX: make sure these values always match `mozilla/source-map`'s
+    // `SourceMapConsumer.{GreatestLower,LeastUpper}Bound` values!
+
     /// Slide to the next smaller mapping.
     GreatestLowerBound = 1,
 

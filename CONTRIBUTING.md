@@ -39,19 +39,19 @@ $ rustup target add wasm32-unknown-unknown --toolchain nightly
 Then, cross compile to `wasm` via the C API crate:
 
 ```
-$ cd source-map-mappings-c-api/
+$ cd source-map-mappings-wasm-api/
 $ cargo build --release --target wasm32-unknown-unknown
 ```
 
 The resulting `wasm` file will be located at
-`source-map-mappings-c-api/target/wasm32-unknown-unknown/release/source_map_mappings.wasm`.
+`source-map-mappings-wasm-api/target/wasm32-unknown-unknown/release/source_map_mappings.wasm`.
 
 To minimize its size, run `wasm-gc` on it:
 
 ```
 $ cargo install wasm-gc # If you don't already have it.
-$ wasm-gc source-map-mappings-c-api/target/wasm32-unknown-unknown/release/source_map_mappings.wasm \\
-    source-map-mappings-c-api/target/wasm32-unknown-unknown/release/source_map_mappings.small.wasm
+$ wasm-gc source-map-mappings-wasm-api/target/wasm32-unknown-unknown/release/source_map_mappings.wasm \\
+    source-map-mappings-wasm-api/target/wasm32-unknown-unknown/release/source_map_mappings.small.wasm
 ```
 
 ## Testing
