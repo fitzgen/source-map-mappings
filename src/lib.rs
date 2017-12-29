@@ -51,8 +51,6 @@ mod comparators;
 
 use std::cmp;
 use comparators::ComparatorFunction;
-use std::marker::PhantomData;
-use std::mem;
 use std::slice;
 use std::u32;
 
@@ -87,29 +85,6 @@ impl From<vlq::Error> for Error {
     }
 }
 
-#[derive(Debug)]
-enum LazilySorted<T, F> {
-    Sorted(Vec<T>, PhantomData<F>),
-    Unsorted(Vec<T>),
-}
-
-impl<T, F> LazilySorted<T, F>
-where
-    F: comparators::ComparatorFunction<T>,
-{
-    fn sort(&mut self) {
-        let me = mem::replace(self, LazilySorted::Unsorted(vec![]));
-        let items = match me {
-            LazilySorted::Sorted(items, _) => items,
-            LazilySorted::Unsorted(mut items) => {
-                items.sort_by(F::compare);
-                items
-            }
-        };
-        mem::replace(self, LazilySorted::Sorted(items, PhantomData));
-    }
-}
-
 /// When doing fuzzy searching, whether to slide the next larger or next smaller
 /// mapping from the queried location.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -138,7 +113,7 @@ impl Default for Bias {
 /// Constructed via `parse_mappings`.
 #[derive(Debug)]
 pub struct Mappings {
-    by_generated: LazilySorted<Mapping, comparators::ByGeneratedLocation>,
+    by_generated: Vec<Mapping>,
     by_original: Option<Vec<Mapping>>,
     computed_column_spans: bool,
 }
@@ -146,12 +121,8 @@ pub struct Mappings {
 impl Mappings {
     /// Get the full set of mappings, ordered by generated location.
     #[inline]
-    pub fn by_generated_location(&mut self) -> &[Mapping] {
-        self.by_generated.sort();
-        match self.by_generated {
-            LazilySorted::Sorted(ref items, _) => items,
-            LazilySorted::Unsorted(_) => unreachable!(),
-        }
+    pub fn by_generated_location(&self) -> &[Mapping] {
+        &self.by_generated
     }
 
     /// Compute the last generated column of each mapping.
@@ -164,12 +135,7 @@ impl Mappings {
             return;
         }
 
-        self.by_generated.sort();
-        let by_generated = match self.by_generated {
-            LazilySorted::Sorted(ref mut items, _) => items,
-            LazilySorted::Unsorted(_) => unreachable!(),
-        };
-        let mut by_generated = by_generated.iter_mut().peekable();
+        let mut by_generated = self.by_generated.iter_mut().peekable();
 
         while let Some(this_mapping) = by_generated.next() {
             if let Some(next_mapping) = by_generated.peek() {
@@ -191,12 +157,7 @@ impl Mappings {
 
         self.compute_column_spans();
 
-        let by_generated = match self.by_generated {
-            LazilySorted::Sorted(ref items, _) => items,
-            LazilySorted::Unsorted(_) => unreachable!(),
-        };
-
-        let mut by_original: Vec<_> = by_generated
+        let mut by_original: Vec<_> = self.by_generated
             .iter()
             .filter(|m| m.original.is_some())
             .cloned()
@@ -208,7 +169,7 @@ impl Mappings {
 
     /// Get the mapping closest to the given generated location, if any exists.
     pub fn original_location_for(
-        &mut self,
+        &self,
         generated_line: u32,
         generated_column: u32,
         bias: Bias,
@@ -338,7 +299,7 @@ impl Default for Mappings {
     #[inline]
     fn default() -> Mappings {
         Mappings {
-            by_generated: LazilySorted::Unsorted(vec![]),
+            by_generated: vec![],
             by_original: None,
             computed_column_spans: false,
         }
@@ -522,6 +483,7 @@ pub fn parse_mappings(input: &[u8]) -> Result<Mappings, Error> {
         }
     }
 
-    mappings.by_generated = LazilySorted::Unsorted(by_generated);
+    by_generated.sort_by(comparators::ByGeneratedLocation::compare);
+    mappings.by_generated = by_generated;
     Ok(mappings)
 }

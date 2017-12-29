@@ -311,7 +311,7 @@ quickcheck! {
         lub: bool
     ) -> Result<(), Error> {
         let mappings_string = mappings.to_string();
-        let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        let mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
         if mappings.by_generated_location().is_empty() {
             return Ok(());
         }
