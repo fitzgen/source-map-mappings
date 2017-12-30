@@ -75,6 +75,10 @@ pub enum Error {
 
     /// Encountered an invalid base 64 character while parsing a VLQ.
     VlqInvalidBase64 = 4,
+
+    /// VLQ encountered a number that, when decoded, would not fit in
+    /// an i64.
+    VlqOverflow = 5,
 }
 
 impl From<vlq::Error> for Error {
@@ -83,6 +87,7 @@ impl From<vlq::Error> for Error {
         match e {
             vlq::Error::UnexpectedEof => Error::VlqUnexpectedEof,
             vlq::Error::InvalidBase64(_) => Error::VlqInvalidBase64,
+            vlq::Error::Overflow => Error::VlqOverflow,
         }
     }
 }
