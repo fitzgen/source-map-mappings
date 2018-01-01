@@ -4,14 +4,14 @@ use source_map_mappings::{Bias, Mapping, Mappings, OriginalLocation, parse_mappi
 
 #[test]
 fn parse_empty_mappings() {
-    let mut mappings = parse_mappings(&[]).expect("should parse OK");
+    let mut mappings = parse_mappings::<()>(&[]).expect("should parse OK");
     assert!(mappings.by_generated_location().is_empty());
     assert!(mappings.by_original_location().is_empty());
 }
 
 #[test]
 fn invalid_mappings() {
-    assert!(parse_mappings(b"...").is_err());
+    assert!(parse_mappings::<()>(b"...").is_err());
 }
 
 // From mozilla/source-map's test/util.js `exports.testMap`.
@@ -20,7 +20,7 @@ const TEST_MAPPINGS: &'static [u8] =
 
 #[test]
 fn can_parse_test_mappings_ok() {
-    parse_mappings(TEST_MAPPINGS).unwrap();
+    parse_mappings::<()>(TEST_MAPPINGS).unwrap();
 }
 
 fn assert_generated_location_for(
@@ -73,7 +73,7 @@ fn assert_bidirectional(
 
 #[test]
 fn test_mapping_back_exactly() {
-    let mut mappings = parse_mappings(TEST_MAPPINGS).unwrap();
+    let mut mappings = parse_mappings::<()>(TEST_MAPPINGS).unwrap();
 
     assert_bidirectional(
         &mut mappings,
@@ -266,7 +266,7 @@ const TEST_MAPPINGS_2: &'static [u8] = b";EAAC,ACAA;EACA,CAAC;EACD";
 
 #[test]
 fn test_all_generated_locations_for_some_line() {
-    let mut mappings = parse_mappings(TEST_MAPPINGS_2).unwrap();
+    let mut mappings = parse_mappings::<()>(TEST_MAPPINGS_2).unwrap();
 
     let mappings_on_source_1_line_1: Vec<_> = mappings
         .all_generated_locations_for(1, 1, None)
@@ -308,7 +308,7 @@ const TEST_MAPPINGS_3: &'static [u8] = b";EAAC,ACAA;;EAEA";
 
 #[test]
 fn test_all_generated_locations_for_line_fuzzy() {
-    let mut mappings = parse_mappings(TEST_MAPPINGS_3).unwrap();
+    let mut mappings = parse_mappings::<()>(TEST_MAPPINGS_3).unwrap();
 
     let mappings_on_source_1_line_1: Vec<_> = mappings
         .all_generated_locations_for(1, 1, None)
@@ -339,7 +339,7 @@ const TEST_MAPPINGS_4: &'static [u8] = b"EAAC,CAAA";
 
 #[test]
 fn test_all_generated_locations_for_column() {
-    let mut mappings = parse_mappings(TEST_MAPPINGS_4).unwrap();
+    let mut mappings = parse_mappings::<()>(TEST_MAPPINGS_4).unwrap();
 
     let mappings_on_source_0_line_0_column_1: Vec<_> = mappings
         .all_generated_locations_for(0, 0, Some(1))
@@ -377,7 +377,7 @@ fn test_all_generated_locations_for_column() {
 
 #[test]
 fn test_all_generated_locations_for_column_fuzzy() {
-    let mut mappings = parse_mappings(TEST_MAPPINGS_4).unwrap();
+    let mut mappings = parse_mappings::<()>(TEST_MAPPINGS_4).unwrap();
 
     let mappings_on_source_0_line_0_column_0: Vec<_> = mappings
         .all_generated_locations_for(0, 0, Some(0))
@@ -419,7 +419,7 @@ const TEST_MAPPINGS_5: &'static [u8] = b";EACC,CAAA";
 
 #[test]
 fn test_all_generated_locations_for_column_on_different_line_fuzzy() {
-    let mut mappings = parse_mappings(TEST_MAPPINGS_5).unwrap();
+    let mut mappings = parse_mappings::<()>(TEST_MAPPINGS_5).unwrap();
 
     let mappings_on_source_0_line_0_column_0: Vec<_> = mappings
         .all_generated_locations_for(0, 0, Some(0))

@@ -13,5 +13,8 @@ repository = "fitzgen/source-map-mappings"
 [dependencies]
 source-map-mappings = { version = "0.2.0", path = ".." }
 
+[features]
+profiling = []
+
 [lib]
 crate-type = ["cdylib"]

@@ -274,18 +274,18 @@ impl VlqRange for SmallPositives {
 quickcheck! {
     fn parse_without_panicking(mappings: Mappings<FullRange>) -> () {
         let mappings_string = mappings.to_string();
-        let _ = source_map_mappings::parse_mappings(mappings_string.as_bytes());
+        let _ = source_map_mappings::parse_mappings::<()>(mappings_string.as_bytes());
     }
 
     fn parse_valid_mappings(mappings: Mappings<SmallPositives>) -> Result<(), Error> {
         let mappings_string = mappings.to_string();
-        source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        source_map_mappings::parse_mappings::<()>(mappings_string.as_bytes())?;
         Ok(())
     }
 
     fn compute_column_spans(mappings: Mappings<SmallPositives>) -> Result<(), Error> {
         let mappings_string = mappings.to_string();
-        let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        let mut mappings = source_map_mappings::parse_mappings::<()>(mappings_string.as_bytes())?;
 
         // Can compute column spans without panicking.
         mappings.compute_column_spans();
@@ -311,7 +311,7 @@ quickcheck! {
         lub: bool
     ) -> Result<(), Error> {
         let mappings_string = mappings.to_string();
-        let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        let mappings = source_map_mappings::parse_mappings::<()>(mappings_string.as_bytes())?;
         if mappings.by_generated_location().is_empty() {
             return Ok(());
         }
@@ -374,7 +374,7 @@ quickcheck! {
         mappings: Mappings<SmallPositives>
     ) -> Result<bool, Error> {
         let mappings_string = mappings.to_string();
-        let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        let mut mappings = source_map_mappings::parse_mappings::<()>(mappings_string.as_bytes())?;
         Ok(mappings.by_original_location().iter().all(|m| m.original.as_ref().is_some()))
     }
 
@@ -386,7 +386,7 @@ quickcheck! {
         lub: bool
     ) -> Result<(), Error> {
         let mappings_string = mappings.to_string();
-        let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        let mut mappings = source_map_mappings::parse_mappings::<()>(mappings_string.as_bytes())?;
         if mappings.by_original_location().is_empty() {
             return Ok(());
         }
@@ -481,7 +481,7 @@ quickcheck! {
         col: Option<u32>
     ) -> Result<(), Error> {
         let mappings_string = mappings.to_string();
-        let mut mappings = source_map_mappings::parse_mappings(mappings_string.as_bytes())?;
+        let mut mappings = source_map_mappings::parse_mappings::<()>(mappings_string.as_bytes())?;
         if mappings.by_original_location().is_empty() {
             return Ok(());
         }

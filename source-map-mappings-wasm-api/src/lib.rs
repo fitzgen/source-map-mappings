@@ -31,6 +31,95 @@ use std::mem;
 use std::ptr;
 use std::slice;
 
+#[cfg(feature = "profiling")]
+mod observer {
+    use source_map_mappings;
+
+    macro_rules! define_raii_observer {
+        ( $name:ident , $ctor:ident , $dtor:ident ) => {
+            #[derive(Debug)]
+            pub struct $name;
+
+            impl Default for $name {
+                #[inline]
+                fn default() -> $name {
+                    extern "C" {
+                        fn $ctor();
+                    }
+                    unsafe {
+                        $ctor();
+                    }
+                    $name
+                }
+            }
+
+            impl Drop for $name {
+                #[inline]
+                fn drop(&mut self) {
+                    extern "C" {
+                        fn $dtor();
+                    }
+                    unsafe {
+                        $dtor();
+                    }
+                }
+            }
+        }
+    }
+
+    define_raii_observer!(ParseMappings, start_parse_mappings, end_parse_mappings);
+    define_raii_observer!(
+        SortByOriginalLocation,
+        start_sort_by_original_location,
+        end_sort_by_original_location
+    );
+    define_raii_observer!(
+        SortByGeneratedLocation,
+        start_sort_by_generated_location,
+        end_sort_by_generated_location
+    );
+    define_raii_observer!(
+        ComputeColumnSpans,
+        start_compute_column_spans,
+        end_compute_column_spans
+    );
+    define_raii_observer!(
+        OriginalLocationFor,
+        start_original_location_for,
+        end_original_location_for
+    );
+    define_raii_observer!(
+        GeneratedLocationFor,
+        start_generated_location_for,
+        end_generated_location_for
+    );
+    define_raii_observer!(
+        AllGeneratedLocationsFor,
+        start_all_generated_locations_for,
+        end_all_generated_locations_for
+    );
+
+    #[derive(Debug, Default)]
+    pub struct Observer;
+
+    impl source_map_mappings::Observer for Observer {
+        type ParseMappings = ParseMappings;
+        type SortByOriginalLocation = SortByOriginalLocation;
+        type SortByGeneratedLocation = SortByGeneratedLocation;
+        type ComputeColumnSpans = ComputeColumnSpans;
+        type OriginalLocationFor = OriginalLocationFor;
+        type GeneratedLocationFor = GeneratedLocationFor;
+        type AllGeneratedLocationsFor = AllGeneratedLocationsFor;
+    }
+}
+
+#[cfg(not(feature = "profiling"))]
+mod observer {
+    pub type Observer = ();
+}
+
+use observer::Observer;
+
 thread_local! {
     static LAST_ERROR: Cell<Option<Error>> = Cell::new(None);
 }
@@ -87,7 +176,7 @@ pub extern "C" fn allocate_mappings(size: usize) -> *mut u8 {
 #[inline]
 fn constrain<'a, T>(_scope: &'a (), reference: &'a T) -> &'a T
 where
-    T: ?Sized
+    T: ?Sized,
 {
     reference
 }
@@ -105,7 +194,7 @@ where
 /// In both the success or failure cases, the caller gives up ownership of the
 /// input mappings string and must not use it again.
 #[no_mangle]
-pub extern "C" fn parse_mappings(mappings: *mut u8) -> *mut Mappings {
+pub extern "C" fn parse_mappings(mappings: *mut u8) -> *mut Mappings<Observer> {
     assert_pointer_is_word_aligned(mappings);
     let mappings = mappings as *mut usize;
 
@@ -147,14 +236,17 @@ pub extern "C" fn parse_mappings(mappings: *mut u8) -> *mut Mappings {
 ///
 /// The caller gives up ownership of the mappings and must not use them again.
 #[no_mangle]
-pub extern "C" fn free_mappings(mappings: *mut Mappings) {
+pub extern "C" fn free_mappings(mappings: *mut Mappings<Observer>) {
     unsafe {
         Box::from_raw(mappings);
     }
 }
 
 #[inline]
-unsafe fn mappings_mut<'a>(_scope: &'a (), mappings: *mut Mappings) -> &'a mut Mappings {
+unsafe fn mappings_mut<'a>(
+    _scope: &'a (),
+    mappings: *mut Mappings<Observer>,
+) -> &'a mut Mappings<Observer> {
     mappings.as_mut().unwrap()
 }
 
@@ -187,50 +279,32 @@ unsafe fn invoke_mapping_callback(mapping: &Mapping) {
     let generated_line = mapping.generated_line;
     let generated_column = mapping.generated_column;
 
-    let (
-        has_last_generated_column,
-        last_generated_column,
-    ) = if let Some(last_generated_column) = mapping.last_generated_column {
-        (true, last_generated_column)
-    } else {
-        (false, 0)
-    };
-
-    let (
-        has_original,
-        source,
-        original_line,
-        original_column,
-        has_name,
-        name,
-    ) = if let Some(original) = mapping.original.as_ref() {
-        let (
-            has_name,
-            name,
-        ) = if let Some(name) = original.name {
-            (true, name)
+    let (has_last_generated_column, last_generated_column) =
+        if let Some(last_generated_column) = mapping.last_generated_column {
+            (true, last_generated_column)
         } else {
             (false, 0)
         };
 
-        (
-            true,
-            original.source,
-            original.original_line,
-            original.original_column,
-            has_name,
-            name,
-        )
-    } else {
-        (
-            false,
-            0,
-            0,
-            0,
-            false,
-            0,
-        )
-    };
+    let (has_original, source, original_line, original_column, has_name, name) =
+        if let Some(original) = mapping.original.as_ref() {
+            let (has_name, name) = if let Some(name) = original.name {
+                (true, name)
+            } else {
+                (false, 0)
+            };
+
+            (
+                true,
+                original.source,
+                original.original_line,
+                original.original_column,
+                has_name,
+                name,
+            )
+        } else {
+            (false, 0, 0, 0, false, 0)
+        };
 
     mapping_callback(
         generated_line,
@@ -249,18 +323,21 @@ unsafe fn invoke_mapping_callback(mapping: &Mapping) {
 /// Invoke the `mapping_callback` on each mapping in the given `Mappings`
 /// structure, in order of generated location.
 #[no_mangle]
-pub extern "C" fn by_generated_location(mappings: *mut Mappings) {
+pub extern "C" fn by_generated_location(mappings: *mut Mappings<Observer>) {
     let this_scope = ();
     let mappings = unsafe { mappings_mut(&this_scope, mappings) };
 
-    mappings.by_generated_location().iter().for_each(|m| unsafe {
-        invoke_mapping_callback(m);
-    });
+    mappings
+        .by_generated_location()
+        .iter()
+        .for_each(|m| unsafe {
+            invoke_mapping_callback(m);
+        });
 }
 
 /// Compute column spans for the given mappings.
 #[no_mangle]
-pub extern "C" fn compute_column_spans(mappings: *mut Mappings) {
+pub extern "C" fn compute_column_spans(mappings: *mut Mappings<Observer>) {
     let this_scope = ();
     let mappings = unsafe { mappings_mut(&this_scope, mappings) };
 
@@ -271,7 +348,7 @@ pub extern "C" fn compute_column_spans(mappings: *mut Mappings) {
 /// structure that has original location information, in order of original
 /// location.
 #[no_mangle]
-pub extern "C" fn by_original_location(mappings: *mut Mappings) {
+pub extern "C" fn by_original_location(mappings: *mut Mappings<Observer>) {
     let this_scope = ();
     let mappings = unsafe { mappings_mut(&this_scope, mappings) };
 
@@ -281,7 +358,7 @@ pub extern "C" fn by_original_location(mappings: *mut Mappings) {
 }
 
 #[inline]
-fn byte_to_bias(bias: u32) -> Bias {
+fn u32_to_bias(bias: u32) -> Bias {
     match bias {
         1 => Bias::GreatestLowerBound,
         2 => Bias::LeastUpperBound,
@@ -301,14 +378,14 @@ fn byte_to_bias(bias: u32) -> Bias {
 /// once. Otherwise, the `mapping_callback` is not invoked at all.
 #[no_mangle]
 pub extern "C" fn original_location_for(
-    mappings: *mut Mappings,
+    mappings: *mut Mappings<Observer>,
     generated_line: u32,
     generated_column: u32,
     bias: u32,
 ) {
     let this_scope = ();
     let mappings = unsafe { mappings_mut(&this_scope, mappings) };
-    let bias = byte_to_bias(bias);
+    let bias = u32_to_bias(bias);
 
     if let Some(m) = mappings.original_location_for(generated_line, generated_column, bias) {
         unsafe {
@@ -323,7 +400,7 @@ pub extern "C" fn original_location_for(
 /// once. Otherwise, the `mapping_callback` is not invoked at all.
 #[no_mangle]
 pub extern "C" fn generated_location_for(
-    mappings: *mut Mappings,
+    mappings: *mut Mappings<Observer>,
     source: u32,
     original_line: u32,
     original_column: u32,
@@ -331,7 +408,7 @@ pub extern "C" fn generated_location_for(
 ) {
     let this_scope = ();
     let mappings = unsafe { mappings_mut(&this_scope, mappings) };
-    let bias = byte_to_bias(bias);
+    let bias = u32_to_bias(bias);
 
     if let Some(m) = mappings.generated_location_for(source, original_line, original_column, bias) {
         unsafe {
@@ -351,7 +428,7 @@ pub extern "C" fn generated_location_for(
 /// original line.
 #[no_mangle]
 pub extern "C" fn all_generated_locations_for(
-    mappings: *mut Mappings,
+    mappings: *mut Mappings<Observer>,
     source: u32,
     original_line: u32,
     has_original_column: bool,
