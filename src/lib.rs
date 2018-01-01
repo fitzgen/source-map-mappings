@@ -108,17 +108,60 @@ impl Default for Bias {
     }
 }
 
+/// A trait for defining a set of RAII types that can observe the start and end
+/// of various operations and queries we perform in their constructors and
+/// destructors.
+///
+/// This is also implemented for `()` as the "null observer" that doesn't
+/// actually do anything.
+pub trait Observer: Default {
+    /// Observe the parsing of the `"mappings"` string.
+    type ParseMappings: Default;
+
+    /// Observe sorting parsed mappings by original location.
+    type SortByOriginalLocation: Default;
+
+    /// Observe sorting parsed mappings by generated location.
+    type SortByGeneratedLocation: Default;
+
+    /// Observe computing column spans.
+    type ComputeColumnSpans: Default;
+
+    /// Observe querying what the original location for some generated location
+    /// is.
+    type OriginalLocationFor: Default;
+
+    /// Observe querying what the generated location for some original location
+    /// is.
+    type GeneratedLocationFor: Default;
+
+    /// Observe querying what all generated locations for some original location
+    /// is.
+    type AllGeneratedLocationsFor: Default;
+}
+
+impl Observer for () {
+    type ParseMappings = ();
+    type SortByOriginalLocation = ();
+    type SortByGeneratedLocation = ();
+    type ComputeColumnSpans = ();
+    type OriginalLocationFor = ();
+    type GeneratedLocationFor = ();
+    type AllGeneratedLocationsFor = ();
+}
+
 /// A parsed set of mappings that can be queried.
 ///
 /// Constructed via `parse_mappings`.
 #[derive(Debug)]
-pub struct Mappings {
+pub struct Mappings<O = ()> {
     by_generated: Vec<Mapping>,
     by_original: Option<Vec<Mapping>>,
     computed_column_spans: bool,
+    observer: O,
 }
 
-impl Mappings {
+impl<O: Observer> Mappings<O> {
     /// Get the full set of mappings, ordered by generated location.
     #[inline]
     pub fn by_generated_location(&self) -> &[Mapping] {
@@ -135,8 +178,9 @@ impl Mappings {
             return;
         }
 
-        let mut by_generated = self.by_generated.iter_mut().peekable();
+        let _observer = O::ComputeColumnSpans::default();
 
+        let mut by_generated = self.by_generated.iter_mut().peekable();
         while let Some(this_mapping) = by_generated.next() {
             if let Some(next_mapping) = by_generated.peek() {
                 if this_mapping.generated_line == next_mapping.generated_line {
@@ -157,6 +201,7 @@ impl Mappings {
 
         self.compute_column_spans();
 
+        let _observer = O::SortByOriginalLocation::default();
         let mut by_original: Vec<_> = self.by_generated
             .iter()
             .filter(|m| m.original.is_some())
@@ -174,6 +219,8 @@ impl Mappings {
         generated_column: u32,
         bias: Bias,
     ) -> Option<&Mapping> {
+        let _observer = O::OriginalLocationFor::default();
+
         let by_generated = self.by_generated_location();
 
         let position = by_generated.binary_search_by(|m| {
@@ -203,6 +250,8 @@ impl Mappings {
         original_column: u32,
         bias: Bias,
     ) -> Option<&Mapping> {
+        let _observer = O::GeneratedLocationFor::default();
+
         let by_original = self.by_original_location();
 
         let position = by_original.binary_search_by(|m| {
@@ -239,6 +288,8 @@ impl Mappings {
         original_line: u32,
         original_column: Option<u32>,
     ) -> AllGeneratedLocationsFor {
+        let _observer = O::AllGeneratedLocationsFor::default();
+
         let query_column = original_column.unwrap_or(0);
 
         let by_original = self.by_original_location();
@@ -295,13 +346,14 @@ impl Mappings {
     }
 }
 
-impl Default for Mappings {
+impl<O: Default> Default for Mappings<O> {
     #[inline]
-    fn default() -> Mappings {
+    fn default() -> Mappings<O> {
         Mappings {
             by_generated: vec![],
             by_original: None,
             computed_column_spans: false,
+            observer: Default::default(),
         }
     }
 }
@@ -425,7 +477,9 @@ where
 
 /// Parse a source map's `"mappings"` string into a queryable `Mappings`
 /// structure.
-pub fn parse_mappings(input: &[u8]) -> Result<Mappings, Error> {
+pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
+    let _observer = O::ParseMappings::default();
+
     let mut generated_line = 0;
     let mut generated_column = 0;
     let mut original_line = 0;
@@ -483,6 +537,7 @@ pub fn parse_mappings(input: &[u8]) -> Result<Mappings, Error> {
         }
     }
 
+    let _observer = O::SortByGeneratedLocation::default();
     by_generated.sort_by(comparators::ByGeneratedLocation::compare);
     mappings.by_generated = by_generated;
     Ok(mappings)

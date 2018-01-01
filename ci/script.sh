@@ -20,6 +20,10 @@ case "$JOB" in
 
         cargo build --release --target wasm32-unknown-unknown
         test -f target/wasm32-unknown-unknown/release/source_map_mappings_wasm_api.wasm
+
+        rm target/wasm32-unknown-unknown/release/source_map_mappings_wasm_api.wasm
+        cargo build --release --target wasm32-unknown-unknown --features profiling
+        test -f target/wasm32-unknown-unknown/release/source_map_mappings_wasm_api.wasm
         ;;
     *)
         echo "Unknown \$JOB = '$JOB'"
