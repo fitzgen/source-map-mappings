@@ -493,7 +493,11 @@ pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
     let mut name = 0;
 
     let mut mappings = Mappings::default();
-    let mut by_generated = vec![];
+
+    // `input.len() / 2` is the upper bound on how many mappings the string
+    // might contain. There would be some sequence like `A,A,A,...` or
+    // `A;A;A;...`.
+    let mut by_generated = Vec::with_capacity(input.len() / 2);
 
     let mut input = input.iter().cloned().peekable();
 
