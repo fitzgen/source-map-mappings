@@ -206,13 +206,14 @@ impl<O: Observer> Mappings<O> {
 
         self.compute_column_spans();
 
-        let _observer = O::SortByOriginalLocation::default();
         let mut by_original: Vec<_> = self.by_generated
             .iter()
             .filter(|m| m.original.is_some())
             .cloned()
             .collect();
-        by_original.sort_by(<comparators::ByOriginalLocation as ComparatorFunction<_>>::compare);
+
+        let _observer = O::SortByOriginalLocation::default();
+        by_original.sort_unstable_by(<comparators::ByOriginalLocation as ComparatorFunction<_>>::compare);
         self.by_original = Some(by_original);
         self.by_original.as_ref().unwrap()
     }
@@ -547,7 +548,7 @@ pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
     }
 
     let _observer = O::SortByGeneratedLocation::default();
-    by_generated.sort_by(comparators::ByGeneratedLocation::compare);
+    by_generated.sort_unstable_by(comparators::ByGeneratedLocation::compare);
     mappings.by_generated = by_generated;
     Ok(mappings)
 }
