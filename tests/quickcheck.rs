@@ -4,7 +4,7 @@ extern crate source_map_mappings;
 extern crate vlq;
 
 use quickcheck::{Arbitrary, Gen};
-use source_map_mappings::{Bias, Error};
+use source_map_mappings::{sort, Bias, Error};
 use std::cmp::Ordering;
 use std::fmt;
 use std::i64;
@@ -16,13 +16,12 @@ trait VlqRange: 'static + Send + Copy + Clone + fmt::Debug + fmt::Display {
     fn high() -> i64;
 }
 
-
 #[derive(Copy, Clone, Debug)]
 struct Vlq<R>(i64, PhantomData<R>);
 
 impl<R> Arbitrary for Vlq<R>
 where
-    R: VlqRange
+    R: VlqRange,
 {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         Vlq(g.gen_range(R::low(), R::high()), PhantomData)
@@ -58,17 +57,17 @@ enum Mapping<R> {
         original_line: Vlq<R>,
         original_column: Vlq<R>,
         name: Vlq<R>,
-    }
+    },
 }
 
 impl<R> Arbitrary for Mapping<R>
 where
-    R: VlqRange
+    R: VlqRange,
 {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         match g.gen_range(0, 3) {
             0 => Mapping::Generated {
-                generated_column: Vlq::<R>::arbitrary(g)
+                generated_column: Vlq::<R>::arbitrary(g),
             },
             1 => Mapping::Original {
                 generated_column: Vlq::<R>::arbitrary(g),
@@ -89,9 +88,11 @@ where
 
     fn shrink(&self) -> Box<Iterator<Item = Self>> {
         match *self {
-            Mapping::Generated { generated_column } => {
-                Box::new(generated_column.shrink().map(|generated_column| Mapping::Generated { generated_column }))
-            }
+            Mapping::Generated { generated_column } => Box::new(
+                generated_column
+                    .shrink()
+                    .map(|generated_column| Mapping::Generated { generated_column }),
+            ),
             Mapping::Original {
                 generated_column,
                 source,
@@ -99,20 +100,20 @@ where
                 original_column,
             } => {
                 let shrunkens = generated_column.shrink().zip(
-                    source.shrink().zip(
-                        original_line.shrink().zip(
-                            original_column.shrink()
-                        )
-                    )
+                    source
+                        .shrink()
+                        .zip(original_line.shrink().zip(original_column.shrink())),
                 );
-                let shrunkens = shrunkens.map(move |(generated_column, (source, (original_line, original_column)))| {
-                    Mapping::Original {
-                        generated_column,
-                        source,
-                        original_line,
-                        original_column,
-                    }
-                });
+                let shrunkens = shrunkens.map(
+                    move |(generated_column, (source, (original_line, original_column)))| {
+                        Mapping::Original {
+                            generated_column,
+                            source,
+                            original_line,
+                            original_column,
+                        }
+                    },
+                );
 
                 let generated = Mapping::Generated { generated_column };
                 Box::new(iter::once(generated).chain(shrunkens))
@@ -126,26 +127,38 @@ where
             } => {
                 let shrunkens = generated_column.shrink().zip(
                     source.shrink().zip(
-                        original_line.shrink().zip(
-                            original_column.shrink().zip(
-                                name.shrink()
-                            )
-                        )
-                    )
+                        original_line
+                            .shrink()
+                            .zip(original_column.shrink().zip(name.shrink())),
+                    ),
                 );
-                let shrunkens = shrunkens.map(move |(generated_column, (source, (original_line, (original_column, name))))| {
-                    Mapping::OriginalWithName {
+                let shrunkens = shrunkens.map(
+                    move |(
                         generated_column,
-                        source,
-                        original_line,
-                        original_column,
-                        name,
-                    }
-                });
+                        (source, (original_line, (original_column, name))),
+                    )| {
+                        Mapping::OriginalWithName {
+                            generated_column,
+                            source,
+                            original_line,
+                            original_column,
+                            name,
+                        }
+                    },
+                );
 
                 let generated = Mapping::Generated { generated_column };
-                let original = Mapping::Original { generated_column, source, original_line, original_column };
-                Box::new(iter::once(generated).chain(iter::once(original)).chain(shrunkens))
+                let original = Mapping::Original {
+                    generated_column,
+                    source,
+                    original_line,
+                    original_column,
+                };
+                Box::new(
+                    iter::once(generated)
+                        .chain(iter::once(original))
+                        .chain(shrunkens),
+                )
             }
         }
     }
@@ -188,7 +201,7 @@ struct GeneratedLine<R>(Vec<Mapping<R>>);
 
 impl<R> Arbitrary for GeneratedLine<R>
 where
-    R: VlqRange
+    R: VlqRange,
 {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         GeneratedLine(Vec::arbitrary(g))
@@ -218,7 +231,7 @@ struct Mappings<R>(Vec<GeneratedLine<R>>);
 
 impl<R> Arbitrary for Mappings<R>
 where
-    R: VlqRange
+    R: VlqRange,
 {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         Mappings(Vec::arbitrary(g))
@@ -253,8 +266,12 @@ impl fmt::Display for FullRange {
 }
 
 impl VlqRange for FullRange {
-    fn low() -> i64 { i64::MIN }
-    fn high() -> i64 { i64::MAX }
+    fn low() -> i64 {
+        i64::MIN
+    }
+    fn high() -> i64 {
+        i64::MAX
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -267,8 +284,12 @@ impl fmt::Display for SmallPositives {
 }
 
 impl VlqRange for SmallPositives {
-    fn low() -> i64 { 0 }
-    fn high() -> i64 { 5 }
+    fn low() -> i64 {
+        0
+    }
+    fn high() -> i64 {
+        5
+    }
 }
 
 quickcheck! {
@@ -571,5 +592,23 @@ quickcheck! {
         );
 
         Ok(())
+    }
+
+    fn quick_sort(xs: Vec<u8>) -> bool {
+        let mut ys = xs.clone();
+        ys.sort();
+
+        #[derive(Debug)]
+        struct C;
+        impl source_map_mappings::comparators::ComparatorFunction<u8> for C {
+            fn compare(a: &u8, b: &u8) -> Ordering {
+                a.cmp(b)
+            }
+        }
+
+        let mut xs = xs;
+        sort::quick_sort::<C, _>(&mut xs);
+
+        xs == ys
     }
 }

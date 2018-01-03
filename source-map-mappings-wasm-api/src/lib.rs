@@ -140,8 +140,6 @@ fn assert_pointer_is_word_aligned(p: *mut u8) {
     assert_eq!(p as usize & (mem::size_of::<usize>() - 1), 0);
 }
 
-// TODO: factor out allocation into its own wasm-allocator crate.
-
 /// Allocate space for a mappings string of the given size (in bytes).
 ///
 /// It is the JS callers responsibility to initialize the resulting buffer by

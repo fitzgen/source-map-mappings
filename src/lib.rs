@@ -45,12 +45,14 @@ dual licensed as above, without any additional terms or conditions.
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
+extern crate rand;
 extern crate vlq;
 
-mod comparators;
+pub mod comparators;
+pub mod sort;
 
 use std::cmp;
-use comparators::ComparatorFunction;
+use sort::quick_sort;
 use std::slice;
 use std::u32;
 
@@ -60,7 +62,6 @@ use std::u32;
 #[repr(u32)]
 pub enum Error {
     // NB: 0 is reserved for OK.
-
     /// The mappings contained a negative line, column, source index, or name
     /// index.
     UnexpectedNegativeNumber = 1,
@@ -98,7 +99,6 @@ impl From<vlq::Error> for Error {
 pub enum Bias {
     // XXX: make sure these values always match `mozilla/source-map`'s
     // `SourceMapConsumer.{GreatestLower,LeastUpper}Bound` values!
-
     /// Slide to the next smaller mapping.
     GreatestLowerBound = 1,
 
@@ -213,7 +213,7 @@ impl<O: Observer> Mappings<O> {
             .collect();
 
         let _observer = O::SortByOriginalLocation::default();
-        by_original.sort_unstable_by(<comparators::ByOriginalLocation as ComparatorFunction<_>>::compare);
+        quick_sort::<comparators::ByOriginalLocation, _>(&mut by_original);
         self.by_original = Some(by_original);
         self.by_original.as_ref().unwrap()
     }
@@ -548,7 +548,7 @@ pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
     }
 
     let _observer = O::SortByGeneratedLocation::default();
-    by_generated.sort_unstable_by(comparators::ByGeneratedLocation::compare);
+    quick_sort::<comparators::ByGeneratedLocation, _>(&mut by_generated);
     mappings.by_generated = by_generated;
     Ok(mappings)
 }

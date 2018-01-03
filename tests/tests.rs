@@ -1,6 +1,6 @@
 extern crate source_map_mappings;
 
-use source_map_mappings::{Bias, Mapping, Mappings, OriginalLocation, parse_mappings};
+use source_map_mappings::{parse_mappings, Bias, Mapping, Mappings, OriginalLocation};
 
 #[test]
 fn parse_empty_mappings() {
@@ -46,10 +46,7 @@ fn assert_original_location_for(
     assert_eq!(actual, expected.as_ref());
 }
 
-fn assert_bidirectional(
-    mappings: &mut Mappings,
-    mapping: Mapping,
-) {
+fn assert_bidirectional(mappings: &mut Mappings, mapping: Mapping) {
     let orig = mapping.original.as_ref().unwrap();
     for bias in &[Bias::GreatestLowerBound, Bias::LeastUpperBound] {
         assert_generated_location_for(
@@ -58,7 +55,7 @@ fn assert_bidirectional(
             orig.original_line,
             orig.original_column,
             *bias,
-            Some(mapping.clone())
+            Some(mapping.clone()),
         );
 
         assert_original_location_for(
@@ -66,7 +63,7 @@ fn assert_bidirectional(
             mapping.generated_line,
             mapping.generated_column,
             *bias,
-            Some(mapping.clone())
+            Some(mapping.clone()),
         );
     }
 }
@@ -85,9 +82,9 @@ fn test_mapping_back_exactly() {
                 source: 0,
                 original_line: 0,
                 original_column: 1,
-                name: None
-            })
-        }
+                name: None,
+            }),
+        },
     );
     assert_bidirectional(
         &mut mappings,
@@ -100,8 +97,8 @@ fn test_mapping_back_exactly() {
                 original_line: 0,
                 original_column: 5,
                 name: None,
-            })
-        }
+            }),
+        },
     );
     assert_bidirectional(
         &mut mappings,
@@ -114,8 +111,8 @@ fn test_mapping_back_exactly() {
                 original_line: 0,
                 original_column: 11,
                 name: None,
-            })
-        }
+            }),
+        },
     );
     assert_bidirectional(
         &mut mappings,
@@ -128,8 +125,8 @@ fn test_mapping_back_exactly() {
                 original_line: 0,
                 original_column: 21,
                 name: Some(0),
-            })
-        }
+            }),
+        },
     );
     assert_bidirectional(
         &mut mappings,
@@ -142,8 +139,8 @@ fn test_mapping_back_exactly() {
                 original_line: 1,
                 original_column: 3,
                 name: None,
-            })
-        }
+            }),
+        },
     );
     assert_bidirectional(
         &mut mappings,
@@ -156,8 +153,8 @@ fn test_mapping_back_exactly() {
                 original_line: 1,
                 original_column: 10,
                 name: Some(1),
-            })
-        }
+            }),
+        },
     );
     assert_bidirectional(
         &mut mappings,
@@ -170,8 +167,8 @@ fn test_mapping_back_exactly() {
                 original_line: 1,
                 original_column: 14,
                 name: Some(0),
-            })
-        }
+            }),
+        },
     );
 
     assert_bidirectional(
@@ -185,8 +182,8 @@ fn test_mapping_back_exactly() {
                 original_line: 0,
                 original_column: 1,
                 name: None,
-            })
-        }
+            }),
+        },
     );
     assert_bidirectional(
         &mut mappings,
@@ -199,8 +196,8 @@ fn test_mapping_back_exactly() {
                 original_line: 0,
                 original_column: 5,
                 name: None,
-            })
-        }
+            }),
+        },
     );
     assert_bidirectional(
         &mut mappings,
@@ -213,8 +210,8 @@ fn test_mapping_back_exactly() {
                 original_line: 0,
                 original_column: 11,
                 name: None,
-            })
-        }
+            }),
+        },
     );
     assert_bidirectional(
         &mut mappings,
@@ -227,8 +224,8 @@ fn test_mapping_back_exactly() {
                 original_line: 0,
                 original_column: 21,
                 name: Some(2),
-            })
-        }
+            }),
+        },
     );
     assert_bidirectional(
         &mut mappings,
@@ -241,8 +238,8 @@ fn test_mapping_back_exactly() {
                 original_line: 1,
                 original_column: 3,
                 name: None,
-            })
-        }
+            }),
+        },
     );
     assert_bidirectional(
         &mut mappings,
@@ -255,8 +252,8 @@ fn test_mapping_back_exactly() {
                 original_line: 1,
                 original_column: 10,
                 name: Some(2),
-            })
-        }
+            }),
+        },
     );
 }
 
@@ -285,7 +282,7 @@ fn test_all_generated_locations_for_some_line() {
                     original_line: 1,
                     original_column: 1,
                     name: None,
-                })
+                }),
             },
             Mapping {
                 generated_line: 2,
@@ -296,7 +293,7 @@ fn test_all_generated_locations_for_some_line() {
                     original_line: 1,
                     original_column: 2,
                     name: None,
-                })
+                }),
             },
         ]
     );
@@ -326,9 +323,9 @@ fn test_all_generated_locations_for_line_fuzzy() {
                     source: 1,
                     original_line: 2,
                     original_column: 1,
-                    name: None
-                })
-            }
+                    name: None,
+                }),
+            },
         ]
     );
 }
@@ -357,8 +354,8 @@ fn test_all_generated_locations_for_column() {
                     source: 0,
                     original_line: 0,
                     original_column: 1,
-                    name: None
-                })
+                    name: None,
+                }),
             },
             Mapping {
                 generated_line: 0,
@@ -368,9 +365,9 @@ fn test_all_generated_locations_for_column() {
                     source: 0,
                     original_line: 0,
                     original_column: 1,
-                    name: None
-                })
-            }
+                    name: None,
+                }),
+            },
         ]
     );
 }
@@ -395,8 +392,8 @@ fn test_all_generated_locations_for_column_fuzzy() {
                     source: 0,
                     original_line: 0,
                     original_column: 1,
-                    name: None
-                })
+                    name: None,
+                }),
             },
             Mapping {
                 generated_line: 0,
@@ -406,9 +403,9 @@ fn test_all_generated_locations_for_column_fuzzy() {
                     source: 0,
                     original_line: 0,
                     original_column: 1,
-                    name: None
-                })
-            }
+                    name: None,
+                }),
+            },
         ]
     );
 }
