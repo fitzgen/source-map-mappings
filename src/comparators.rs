@@ -1,8 +1,12 @@
+//! Comparator functions for sorting mappings in different ways.
+
 use super::{Mapping, OriginalLocation};
 use std::cmp::Ordering;
 use std::fmt;
 
+/// A function that can compare two `T`s.
 pub trait ComparatorFunction<T>: fmt::Debug {
+    /// Compare the given values.
     fn compare(&T, &T) -> Ordering;
 }
 
@@ -42,6 +46,8 @@ macro_rules! compare {
     }
 }
 
+/// Sort mappings by their generated locations, breaking ties by their original
+/// locations.
 #[derive(Debug)]
 pub struct ByGeneratedLocation;
 
@@ -54,6 +60,8 @@ impl ComparatorFunction<Mapping> for ByGeneratedLocation {
     }
 }
 
+/// Sort mappings by their original locations, breaking ties by their generated
+/// locations.
 #[derive(Debug)]
 pub struct ByOriginalLocation;
 
