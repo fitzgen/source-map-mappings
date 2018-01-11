@@ -20,6 +20,4 @@ profiling = []
 crate-type = ["cdylib"]
 
 [profile.release]
-# Enable this when profiling or debugging.
-# debug = true
-opt-level = "s"
+debug = true
