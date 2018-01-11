@@ -23,7 +23,7 @@ We abide by the [Rust Code of Conduct][coc] and ask that you do as well.
 
 ## Building
 
-To build for the host target (for use with testing):
+To build the core library for the host target (for use with testing):
 
 ```
 $ cargo build
@@ -36,22 +36,20 @@ $ rustup update
 $ rustup target add wasm32-unknown-unknown --toolchain nightly
 ```
 
-Then, cross compile to `wasm` via the C API crate:
+Then, cross compile to a `.wasm` file via the WebAssembly API crate:
 
 ```
 $ cd source-map-mappings-wasm-api/
-$ cargo build --release --target wasm32-unknown-unknown
+$ ./build.py -o output.wasm
 ```
 
-The resulting `wasm` file will be located at
-`source-map-mappings-wasm-api/target/wasm32-unknown-unknown/release/source_map_mappings.wasm`.
+The `build.py` script handles shrinking the size of the resulting `.wasm` file
+for you, with `wasm-gc`, `wasm-snip`, and `wasm-opt`.
 
-To minimize its size, run `wasm-gc` on it:
+For more details, run:
 
 ```
-$ cargo install wasm-gc # If you don't already have it.
-$ wasm-gc source-map-mappings-wasm-api/target/wasm32-unknown-unknown/release/source_map_mappings.wasm \\
-    source-map-mappings-wasm-api/target/wasm32-unknown-unknown/release/source_map_mappings.small.wasm
+$ ./build.py --help
 ```
 
 ## Testing

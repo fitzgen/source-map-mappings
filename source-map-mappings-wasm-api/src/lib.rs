@@ -26,9 +26,9 @@
 extern crate source_map_mappings;
 
 use source_map_mappings::{Bias, Error, Mapping, Mappings};
-use std::cell::Cell;
 use std::mem;
 use std::ptr;
+use std::process;
 use std::slice;
 
 #[cfg(feature = "profiling")]
@@ -120,24 +120,24 @@ mod observer {
 
 use observer::Observer;
 
-thread_local! {
-    static LAST_ERROR: Cell<Option<Error>> = Cell::new(None);
-}
+static mut LAST_ERROR: Option<Error> = None;
 
 /// Get the last error's error code, or 0 if there was none.
 ///
 /// See `source_map_mappings::Error` for the error code definitions.
 #[no_mangle]
 pub extern "C" fn get_last_error() -> u32 {
-    match LAST_ERROR.with(|last_error| last_error.get()) {
-        None => 0,
-        Some(e) => e as u32,
+    unsafe {
+        match LAST_ERROR {
+            None => 0,
+            Some(e) => e as u32,
+        }
     }
 }
 
 #[inline]
 fn assert_pointer_is_word_aligned(p: *mut u8) {
-    assert_eq!(p as usize & (mem::size_of::<usize>() - 1), 0);
+    debug_assert_eq!(p as usize & (mem::size_of::<usize>() - 1), 0);
 }
 
 /// Allocate space for a mappings string of the given size (in bytes).
@@ -161,7 +161,7 @@ pub extern "C" fn allocate_mappings(size: usize) -> *mut u8 {
 
     // Leak the vec's elements and get a pointer to them.
     let ptr = vec.as_mut_ptr();
-    assert!(!ptr.is_null());
+    debug_assert!(!ptr.is_null());
     mem::forget(vec);
 
     // Advance the pointer past our stuffed data and return it to JS, so that JS
@@ -199,11 +199,11 @@ pub extern "C" fn parse_mappings(mappings: *mut u8) -> *mut Mappings<Observer> {
     // Unstuff the data we put just before the pointer to the mappings
     // string.
     let capacity_ptr = mappings.wrapping_offset(-2);
-    assert!(!capacity_ptr.is_null());
+    debug_assert!(!capacity_ptr.is_null());
     let capacity = unsafe { *capacity_ptr };
 
     let size_ptr = mappings.wrapping_offset(-1);
-    assert!(!size_ptr.is_null());
+    debug_assert!(!size_ptr.is_null());
     let size = unsafe { *size_ptr };
 
     // Construct the input slice from the pointer and parse the mappings.
@@ -224,7 +224,9 @@ pub extern "C" fn parse_mappings(mappings: *mut u8) -> *mut Mappings<Observer> {
     match result {
         Ok(mappings) => Box::into_raw(Box::new(mappings)),
         Err(e) => {
-            LAST_ERROR.with(|last_error| last_error.set(Some(e)));
+            unsafe {
+                LAST_ERROR = Some(e);
+            }
             ptr::null_mut()
         }
     }
@@ -360,13 +362,17 @@ fn u32_to_bias(bias: u32) -> Bias {
     match bias {
         1 => Bias::GreatestLowerBound,
         2 => Bias::LeastUpperBound,
-        otherwise => panic!(
-            "Invalid `Bias = {}`; must be `Bias::GreatestLowerBound = {}` or \
-             `Bias::LeastUpperBound = {}`",
-            otherwise,
-            Bias::GreatestLowerBound as u32,
-            Bias::LeastUpperBound as u32,
-        ),
+        otherwise => if cfg!(debug_assertions) {
+            panic!(
+                "Invalid `Bias = {}`; must be `Bias::GreatestLowerBound = {}` or \
+                 `Bias::LeastUpperBound = {}`",
+                otherwise,
+                Bias::GreatestLowerBound as u32,
+                Bias::LeastUpperBound as u32,
+            )
+        } else {
+            process::abort()
+        },
     }
 }
 

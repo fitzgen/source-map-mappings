@@ -51,8 +51,9 @@ extern crate vlq;
 pub mod comparators;
 pub mod sort;
 
-use std::cmp;
 use sort::quick_sort;
+use std::cmp;
+use std::process;
 use std::slice;
 use std::u32;
 
@@ -166,6 +167,20 @@ pub struct Mappings<O = ()> {
     observer: O,
 }
 
+#[cfg(debug_assertions)]
+fn unwrap<T>(o: Option<T>) -> T {
+    o.unwrap()
+}
+
+#[cfg(not(debug_assertions))]
+#[inline]
+fn unwrap<T>(o: Option<T>) -> T {
+    match o {
+        Some(t) => t,
+        None => process::abort(),
+    }
+}
+
 impl<O: Observer> Mappings<O> {
     /// Get the full set of mappings, ordered by generated location.
     #[inline]
@@ -215,7 +230,7 @@ impl<O: Observer> Mappings<O> {
         let _observer = O::SortByOriginalLocation::default();
         quick_sort::<comparators::ByOriginalLocation, _>(&mut by_original);
         self.by_original = Some(by_original);
-        self.by_original.as_ref().unwrap()
+        unwrap(self.by_original.as_ref().map(|origs| &origs[..]))
     }
 
     /// Get the mapping closest to the given generated location, if any exists.
@@ -261,7 +276,7 @@ impl<O: Observer> Mappings<O> {
         let by_original = self.by_original_location();
 
         let position = by_original.binary_search_by(|m| {
-            let original = m.original.as_ref().unwrap();
+            let original = unwrap(m.original.as_ref());
             original
                 .source
                 .cmp(&source)
@@ -301,7 +316,7 @@ impl<O: Observer> Mappings<O> {
         let by_original = self.by_original_location();
 
         let compare = |m: &Mapping| {
-            let original: &OriginalLocation = m.original.as_ref().unwrap();
+            let original: &OriginalLocation = unwrap(m.original.as_ref());
             original
                 .source
                 .cmp(&source)
@@ -322,7 +337,7 @@ impl<O: Observer> Mappings<O> {
         }
 
         let (mappings, original_line, original_column) = if idx < by_original.len() {
-            let orig = by_original[idx].original.as_ref().unwrap();
+            let orig = unwrap(by_original[idx].original.as_ref());
             let mappings = by_original[idx..].iter();
 
             // Fuzzy line matching only happens when we don't have a column.
@@ -381,7 +396,7 @@ impl<'a> Iterator for AllGeneratedLocationsFor<'a> {
         match self.mappings.next() {
             None => None,
             Some(m) => {
-                let m_orig = m.original.as_ref().unwrap();
+                let m_orig = unwrap(m.original.as_ref());
 
                 if m_orig.source != self.source || m_orig.original_line != self.original_line {
                     return None;
@@ -507,10 +522,10 @@ pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
             b';' => {
                 generated_line += 1;
                 generated_column = 0;
-                input.next().unwrap();
+                unwrap(input.next());
             }
             b',' => {
-                input.next().unwrap();
+                unwrap(input.next());
             }
             _ => {
                 let mut mapping = Mapping::default();
