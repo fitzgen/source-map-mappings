@@ -124,6 +124,7 @@ def reverse_call_graph(call_graph, args):
 def print_callers(reversed_call_graph, args, function=None, depth=0, seen=set()):
     if not function:
         function = args.function
+    seen.add(function)
 
     if depth == 0:
         depth += 1
@@ -132,15 +133,17 @@ def print_callers(reversed_call_graph, args, function=None, depth=0, seen=set())
             print("    <function not defined>")
             return
 
-    for caller in reversed_call_graph[function]:
-        indent = ""
-        for _ in range(0, depth):
-            indent += "    "
+    if args.max_depth is None or depth < args.max_depth:
+        for caller in reversed_call_graph[function]:
+            if caller in seen:
+                continue
 
-        print("{}⬑ {}".format(indent, caller))
+            indent = ""
+            for _ in range(0, depth):
+                indent += "    "
 
-        if caller not in seen and (args.max_depth is None or depth < args.max_depth):
-            seen.add(caller)
+            print("{}⬑ {}".format(indent, caller))
+
             print_callers(reversed_call_graph, args, function=caller, depth=depth+1, seen=seen)
 
 def main():
@@ -154,9 +157,8 @@ def main():
     elif args.top:
         top_functions = parse_top_functions(disassembly, args)
         for f, size in top_functions:
-            print(size, "bytes:")
+            print(size, "bytes: ", end="")
             print_callers(reversed_call_graph, args, function=f)
-            print()
     else:
         raise Exception("Must use one of --function or --top")
 
