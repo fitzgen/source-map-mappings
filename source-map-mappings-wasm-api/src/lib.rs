@@ -26,7 +26,6 @@
 extern crate source_map_mappings;
 
 use source_map_mappings::{Bias, Error, Mapping, Mappings};
-use std::cell::Cell;
 use std::mem;
 use std::ptr;
 use std::process;
@@ -121,18 +120,18 @@ mod observer {
 
 use observer::Observer;
 
-thread_local! {
-    static LAST_ERROR: Cell<Option<Error>> = Cell::new(None);
-}
+static mut LAST_ERROR: Option<Error> = None;
 
 /// Get the last error's error code, or 0 if there was none.
 ///
 /// See `source_map_mappings::Error` for the error code definitions.
 #[no_mangle]
 pub extern "C" fn get_last_error() -> u32 {
-    match LAST_ERROR.with(|last_error| last_error.get()) {
-        None => 0,
-        Some(e) => e as u32,
+    unsafe {
+        match LAST_ERROR {
+            None => 0,
+            Some(e) => e as u32,
+        }
     }
 }
 
@@ -225,7 +224,9 @@ pub extern "C" fn parse_mappings(mappings: *mut u8) -> *mut Mappings<Observer> {
     match result {
         Ok(mappings) => Box::into_raw(Box::new(mappings)),
         Err(e) => {
-            LAST_ERROR.with(|last_error| last_error.set(Some(e)));
+            unsafe {
+                LAST_ERROR = Some(e);
+            }
             ptr::null_mut()
         }
     }
