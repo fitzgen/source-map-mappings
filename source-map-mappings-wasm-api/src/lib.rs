@@ -215,8 +215,9 @@ pub extern "C" fn parse_mappings(mappings: *mut u8) -> *mut Mappings<Observer> {
     };
 
     // Deallocate the mappings string and its two prefix words.
+    let size_in_usizes = (size + mem::size_of::<usize>() - 1) / mem::size_of::<usize>();
     unsafe {
-        Vec::<usize>::from_raw_parts(capacity_ptr, size, capacity);
+        Vec::<usize>::from_raw_parts(capacity_ptr, size_in_usizes + 2, capacity);
     }
 
     // Return the result, saving any errors on the side for later inspection by
