@@ -53,7 +53,6 @@ pub mod sort;
 
 use sort::quick_sort;
 use std::cmp;
-use std::process;
 use std::slice;
 use std::u32;
 
@@ -175,6 +174,7 @@ fn unwrap<T>(o: Option<T>) -> T {
 #[cfg(not(debug_assertions))]
 #[inline]
 fn unwrap<T>(o: Option<T>) -> T {
+    use std::process;
     match o {
         Some(t) => t,
         None => process::abort(),
