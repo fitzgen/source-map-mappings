@@ -53,13 +53,11 @@ pub mod sort;
 
 use sort::quick_sort;
 use std::cmp;
-use std::process;
 use std::slice;
 use std::u32;
 
 /// Errors that can occur during parsing.
 #[derive(Copy, Clone, Debug)]
-#[repr(C)]
 #[repr(u32)]
 pub enum Error {
     // NB: 0 is reserved for OK.
@@ -95,7 +93,6 @@ impl From<vlq::Error> for Error {
 /// When doing fuzzy searching, whether to slide the next larger or next smaller
 /// mapping from the queried location.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(C)]
 #[repr(u32)]
 pub enum Bias {
     // XXX: make sure these values always match `mozilla/source-map`'s
@@ -175,6 +172,7 @@ fn unwrap<T>(o: Option<T>) -> T {
 #[cfg(not(debug_assertions))]
 #[inline]
 fn unwrap<T>(o: Option<T>) -> T {
+    use std::process;
     match o {
         Some(t) => t,
         None => process::abort(),
