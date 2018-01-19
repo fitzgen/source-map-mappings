@@ -58,7 +58,6 @@ use std::u32;
 
 /// Errors that can occur during parsing.
 #[derive(Copy, Clone, Debug)]
-#[repr(C)]
 #[repr(u32)]
 pub enum Error {
     // NB: 0 is reserved for OK.
@@ -94,7 +93,6 @@ impl From<vlq::Error> for Error {
 /// When doing fuzzy searching, whether to slide the next larger or next smaller
 /// mapping from the queried location.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(C)]
 #[repr(u32)]
 pub enum Bias {
     // XXX: make sure these values always match `mozilla/source-map`'s
