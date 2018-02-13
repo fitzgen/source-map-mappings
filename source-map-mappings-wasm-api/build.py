@@ -94,13 +94,13 @@ def wasm_gc(args, wasm_path):
     return out_path
 
 SHOULD_SNIP = [
-    re.compile(r".*(std|core)::panicking"),
-    re.compile(r".*(std|core)::fmt"),
-    re.compile(r".*core::option::expect_failed"),
-    re.compile(r".*core::str::slice_error_fail"),
-    re.compile(r".*core::result::unwrap_failed"),
-    re.compile(r".*std::thread::local::os::destroy_value"),
-    re.compile(r".*std::io::Write"),
+    re.compile(r".*(std|core)(9|::)panicking"),
+    re.compile(r".*(std|core)(3|::)fmt"),
+    re.compile(r".*core(6|::)option(13|::)expect_failed"),
+    re.compile(r".*core(3|::)str(16|::)slice_error_fail"),
+    re.compile(r".*core(6|::)result(13|::)unwrap_failed"),
+    re.compile(r".*std(6|::)thread(5|::)local(2|::)os(13|::)destroy_value"),
+    re.compile(r".*std(2|::)io(5|::)Write"),
 ]
 
 def wasm_snip(args, wasm_path):
