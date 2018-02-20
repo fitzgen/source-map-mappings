@@ -46,15 +46,15 @@ macro_rules! compare {
     }
 }
 
-/// Sort mappings by their generated locations, breaking ties by their original
-/// locations.
+/// Sort mappings by their generated location, but don't compare generated
+/// lines. This is useful for when we know that all mappings being sorted have
+/// the same generated line number.
 #[derive(Debug)]
-pub struct ByGeneratedLocation;
+pub struct ByGeneratedTail;
 
-impl ComparatorFunction<Mapping> for ByGeneratedLocation {
+impl ComparatorFunction<Mapping> for ByGeneratedTail {
     #[inline]
     fn compare(a: &Mapping, b: &Mapping) -> Ordering {
-        compare!(a.generated_line, b.generated_line);
         compare!(a.generated_column, b.generated_column);
         ByOriginalLocation::compare(&a.original, &b.original)
     }

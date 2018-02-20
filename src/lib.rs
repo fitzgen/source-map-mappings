@@ -505,6 +505,7 @@ pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
     let mut original_column = 0;
     let mut source = 0;
     let mut name = 0;
+    let mut generated_line_start_index = 0;
 
     let mut mappings = Mappings::default();
 
@@ -521,6 +522,19 @@ pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
                 generated_line += 1;
                 generated_column = 0;
                 unwrap(input.next());
+
+                // Because mappings are sorted with regards to generated line
+                // due to the encoding format, and sorting by generated location
+                // starts by comparing generated line, we can sort only the
+                // smaller subsequence of this generated line's mappings and end
+                // up with a fully sorted array.
+                if generated_line_start_index < by_generated.len() {
+                    let _observer = O::SortByGeneratedLocation::default();
+                    quick_sort::<comparators::ByGeneratedTail, _>(
+                        &mut by_generated[generated_line_start_index..]
+                    );
+                    generated_line_start_index = by_generated.len();
+                }
             }
             b',' => {
                 unwrap(input.next());
@@ -560,8 +574,13 @@ pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
         }
     }
 
-    let _observer = O::SortByGeneratedLocation::default();
-    quick_sort::<comparators::ByGeneratedLocation, _>(&mut by_generated);
+    if generated_line_start_index < by_generated.len() {
+        let _observer = O::SortByGeneratedLocation::default();
+        quick_sort::<comparators::ByGeneratedTail, _>(
+            &mut by_generated[generated_line_start_index..]
+        );
+    }
+
     mappings.by_generated = by_generated;
     Ok(mappings)
 }
