@@ -353,7 +353,7 @@ pub extern "C" fn by_original_location(mappings: *mut Mappings<Observer>) {
     let this_scope = ();
     let mappings = unsafe { mappings_mut(&this_scope, mappings) };
 
-    mappings.by_original_location().iter().for_each(|m| unsafe {
+    mappings.by_original_location().for_each(|m| unsafe {
         invoke_mapping_callback(m);
     });
 }
