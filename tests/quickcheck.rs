@@ -339,8 +339,16 @@ quickcheck! {
 
         // To make this more useful, wrap `line` and `col` around the maximum
         // line and column in the mappings respectively.
-        let max_line = mappings.by_generated_location().iter().map(|m| m.generated_line).max().unwrap();
-        let max_col = mappings.by_generated_location().iter().map(|m| m.generated_column).max().unwrap();
+        let max_line = mappings.by_generated_location()
+            .iter()
+            .map(|m| m.generated_line)
+            .max()
+            .unwrap();
+        let max_col = mappings.by_generated_location()
+            .iter()
+            .map(|m| m.generated_column)
+            .max()
+            .unwrap();
         let line = line % (max_line + 1);
         let col = col % (max_col + 1);
 
@@ -396,7 +404,7 @@ quickcheck! {
     ) -> Result<bool, Error> {
         let mappings_string = mappings.to_string();
         let mut mappings = source_map_mappings::parse_mappings::<()>(mappings_string.as_bytes())?;
-        Ok(mappings.by_original_location().iter().all(|m| m.original.as_ref().is_some()))
+        Ok(mappings.by_original_location().all(|m| m.original.as_ref().is_some()))
     }
 
     fn generated_location_for(
@@ -408,24 +416,21 @@ quickcheck! {
     ) -> Result<(), Error> {
         let mappings_string = mappings.to_string();
         let mut mappings = source_map_mappings::parse_mappings::<()>(mappings_string.as_bytes())?;
-        if mappings.by_original_location().is_empty() {
+        if !mappings.by_generated_location().iter().any(|m| m.original.is_some()) {
             return Ok(());
         }
 
         // To make this more useful, wrap `source`, `line`, and `col` around the
         // maximums.
         let max_source = mappings.by_original_location()
-            .iter()
             .map(|m| m.original.as_ref().unwrap().source)
             .max()
             .unwrap();
         let max_line = mappings.by_original_location()
-            .iter()
             .map(|m| m.original.as_ref().unwrap().original_line)
             .max()
             .unwrap();
         let max_col = mappings.by_original_location()
-            .iter()
             .map(|m| m.original.as_ref().unwrap().original_column)
             .max()
             .unwrap();
@@ -471,7 +476,7 @@ quickcheck! {
         // If we didn't get any result, then every mapping should not match our
         // query, and should additionally be on the opposite side of ordering
         // from our requested bias.
-        for m in mappings.by_original_location().iter() {
+        for m in mappings.by_original_location() {
             let m_orig = m.original.as_ref().unwrap();
             let m_source = m_orig.source;
             let m_line = m_orig.original_line;
@@ -503,22 +508,19 @@ quickcheck! {
     ) -> Result<(), Error> {
         let mappings_string = mappings.to_string();
         let mut mappings = source_map_mappings::parse_mappings::<()>(mappings_string.as_bytes())?;
-        if mappings.by_original_location().is_empty() {
+        if !mappings.by_generated_location().iter().any(|m| m.original.is_some()) {
             return Ok(());
         }
 
         let max_source = mappings.by_original_location()
-            .iter()
             .map(|m| m.original.as_ref().unwrap().source)
             .max()
             .unwrap();
         let max_line = mappings.by_original_location()
-            .iter()
             .map(|m| m.original.as_ref().unwrap().original_line)
             .max()
             .unwrap();
         let max_col = mappings.by_original_location()
-            .iter()
             .map(|m| m.original.as_ref().unwrap().original_column)
             .max()
             .unwrap();
@@ -574,7 +576,6 @@ quickcheck! {
         assert_eq!(
             count,
             mappings.by_original_location()
-                .iter()
                 .filter(|m| {
                     let m_orig = m.original.as_ref().unwrap();
                     if m_orig.source != source || m_orig.original_line != line {
