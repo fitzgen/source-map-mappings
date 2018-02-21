@@ -94,13 +94,16 @@ def wasm_gc(args, wasm_path):
     return out_path
 
 SHOULD_SNIP = [
-    re.compile(r".*(std|core)::panicking"),
-    re.compile(r".*(std|core)::fmt"),
-    re.compile(r".*core::option::expect_failed"),
-    re.compile(r".*core::str::slice_error_fail"),
-    re.compile(r".*core::result::unwrap_failed"),
-    re.compile(r".*std::thread::local::os::destroy_value"),
-    re.compile(r".*std::io::Write"),
+    re.compile(r".*(std|core)::panicking.*"),
+    re.compile(r".*(std|core)::fmt.*"),
+    re.compile(r".*core::option::expect_failed.*"),
+    re.compile(r".*core::str::slice_error_fail.*"),
+    re.compile(r".*core::result::unwrap_failed.*"),
+    re.compile(r".*std::thread::local.*"),
+    re.compile(r".*std::io.*"),
+    re.compile(r"__.*2"),
+    re.compile(r".*(std|core)::error.*"),
+    re.compile(r".*(std|core)::any::Any.*"),
 ]
 
 def wasm_snip(args, wasm_path):
@@ -109,7 +112,7 @@ def wasm_snip(args, wasm_path):
 
     out_path = add_path_ext_prefix(wasm_path, "snip")
 
-    private_functions = run(["wasm-nm", "-p", "-j", wasm_path]).splitlines()
+    private_functions = run(["wasm-nm", "-j", wasm_path]).splitlines()
 
     snip_functions = set()
     for snip in SHOULD_SNIP:
