@@ -146,6 +146,8 @@ def print_callers(reversed_call_graph, args, function=None, depth=0, seen=set())
 
             print_callers(reversed_call_graph, args, function=caller, depth=depth+1, seen=seen)
 
+    seen.remove(function)
+
 def main():
     args = parser.parse_args()
     disassembly = disassemble(args)
