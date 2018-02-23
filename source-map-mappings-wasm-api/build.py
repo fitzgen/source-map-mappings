@@ -98,6 +98,7 @@ SHOULD_SNIP = [
     re.compile(r".*(std|core)::fmt.*"),
     re.compile(r".*core::option::expect_failed.*"),
     re.compile(r".*core::str::slice_error_fail.*"),
+    re.compile(r".*core::slice::slice_index_.*_fail.*"),
     re.compile(r".*core::result::unwrap_failed.*"),
     re.compile(r".*std::thread::local.*"),
     re.compile(r".*std::io.*"),
