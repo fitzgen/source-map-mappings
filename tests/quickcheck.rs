@@ -4,7 +4,7 @@ extern crate source_map_mappings;
 extern crate vlq;
 
 use quickcheck::{Arbitrary, Gen};
-use source_map_mappings::{sort, Bias, Error};
+use source_map_mappings::{Bias, Error};
 use std::cmp::Ordering;
 use std::fmt;
 use std::i64;
@@ -593,23 +593,5 @@ quickcheck! {
         );
 
         Ok(())
-    }
-
-    fn quick_sort(xs: Vec<u8>) -> bool {
-        let mut ys = xs.clone();
-        ys.sort();
-
-        #[derive(Debug)]
-        struct C;
-        impl source_map_mappings::comparators::ComparatorFunction<u8> for C {
-            fn compare(a: &u8, b: &u8) -> Ordering {
-                a.cmp(b)
-            }
-        }
-
-        let mut xs = xs;
-        sort::quick_sort::<C, _>(&mut xs);
-
-        xs == ys
     }
 }

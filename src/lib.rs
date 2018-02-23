@@ -49,9 +49,8 @@ extern crate rand;
 extern crate vlq;
 
 pub mod comparators;
-pub mod sort;
 
-use sort::quick_sort;
+use comparators::ComparatorFunction;
 use std::cmp;
 use std::marker::PhantomData;
 use std::mem;
@@ -173,7 +172,7 @@ where
             LazilySorted::Sorted(items, ..) => items,
             LazilySorted::Unsorted(mut items) => {
                 let _observer = O::default();
-                quick_sort::<F, _>(&mut items);
+                items.sort_unstable_by(F::compare);
                 items
             }
         };
@@ -667,9 +666,7 @@ pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
                 // up with a fully sorted array.
                 if generated_line_start_index < by_generated.len() {
                     let _observer = O::SortByGeneratedLocation::default();
-                    quick_sort::<comparators::ByGeneratedTail, _>(
-                        &mut by_generated[generated_line_start_index..]
-                    );
+                    by_generated[generated_line_start_index..].sort_unstable_by(comparators::ByGeneratedTail::compare);
                     generated_line_start_index = by_generated.len();
                 }
             }
@@ -713,9 +710,7 @@ pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
 
     if generated_line_start_index < by_generated.len() {
         let _observer = O::SortByGeneratedLocation::default();
-        quick_sort::<comparators::ByGeneratedTail, _>(
-            &mut by_generated[generated_line_start_index..]
-        );
+        by_generated[generated_line_start_index..].sort_unstable_by(comparators::ByGeneratedTail::compare);
     }
 
     mappings.by_generated = by_generated;
