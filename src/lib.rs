@@ -250,10 +250,17 @@ impl<O: Observer> Mappings<O> {
     /// After this method has been called, any mappings with
     /// `last_generated_column == None` means that the mapping spans to the end
     /// of the line.
+    #[inline]
     pub fn compute_column_spans(&mut self) {
         if self.computed_column_spans {
             return;
         }
+        self.compute_column_spans_slow_path();
+    }
+
+    #[inline(never)]
+    fn compute_column_spans_slow_path(&mut self) {
+        debug_assert!(!self.computed_column_spans);
 
         let _observer = O::ComputeColumnSpans::default();
 
@@ -269,12 +276,20 @@ impl<O: Observer> Mappings<O> {
         self.computed_column_spans = true;
     }
 
+    #[inline]
     fn source_buckets(&mut self) -> &mut [LazilySorted<Mapping, comparators::ByOriginalLocationSameSource, O::SortByOriginalLocation>] {
         if let Some(ref mut buckets) = self.by_original {
             return buckets;
         }
+        self.source_buckets_slow_path()
+    }
+
+    #[inline(never)]
+    fn source_buckets_slow_path(&mut self) -> &mut [LazilySorted<Mapping, comparators::ByOriginalLocationSameSource, O::SortByOriginalLocation>] {
+        debug_assert!(self.by_original.is_none());
 
         self.compute_column_spans();
+
         let _observer = O::SortByOriginalLocation::default();
 
         let mut originals = vec![];
