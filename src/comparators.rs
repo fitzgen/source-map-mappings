@@ -46,15 +46,15 @@ macro_rules! compare {
     }
 }
 
-/// Sort mappings by their generated locations, breaking ties by their original
-/// locations.
+/// Sort mappings by their generated location, but don't compare generated
+/// lines. This is useful for when we know that all mappings being sorted have
+/// the same generated line number.
 #[derive(Debug)]
-pub struct ByGeneratedLocation;
+pub struct ByGeneratedTail;
 
-impl ComparatorFunction<Mapping> for ByGeneratedLocation {
+impl ComparatorFunction<Mapping> for ByGeneratedTail {
     #[inline]
     fn compare(a: &Mapping, b: &Mapping) -> Ordering {
-        compare!(a.generated_line, b.generated_line);
         compare!(a.generated_column, b.generated_column);
         ByOriginalLocation::compare(&a.original, &b.original)
     }
@@ -84,6 +84,36 @@ impl ComparatorFunction<OriginalLocation> for ByOriginalLocation {
     #[inline]
     fn compare(a: &OriginalLocation, b: &OriginalLocation) -> Ordering {
         compare!(a.source, b.source);
+        compare!(a.original_line, b.original_line);
+        compare!(a.original_column, b.original_column);
+        a.name.cmp(&b.name)
+    }
+}
+
+/// Assuming mappings are in the same original source, sort mappings by their
+/// original locations, breaking ties by their generated locations.
+#[derive(Debug)]
+pub struct ByOriginalLocationSameSource;
+
+impl ComparatorFunction<Mapping> for ByOriginalLocationSameSource {
+    #[inline]
+    fn compare(a: &Mapping, b: &Mapping) -> Ordering {
+        let c = ByOriginalLocationSameSource::compare(&a.original, &b.original);
+        match c {
+            Ordering::Less | Ordering::Greater => c,
+            Ordering::Equal => {
+                compare!(a.generated_line, b.generated_line);
+                compare!(a.generated_column, b.generated_column);
+                Ordering::Equal
+            }
+        }
+    }
+}
+
+impl ComparatorFunction<OriginalLocation> for ByOriginalLocationSameSource {
+    #[inline]
+    fn compare(a: &OriginalLocation, b: &OriginalLocation) -> Ordering {
+        debug_assert_eq!(a.source, b.source);
         compare!(a.original_line, b.original_line);
         compare!(a.original_column, b.original_column);
         a.name.cmp(&b.name)

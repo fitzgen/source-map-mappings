@@ -49,10 +49,11 @@ extern crate rand;
 extern crate vlq;
 
 pub mod comparators;
-pub mod sort;
 
-use sort::quick_sort;
+use comparators::ComparatorFunction;
 use std::cmp;
+use std::marker::PhantomData;
+use std::mem;
 use std::slice;
 use std::u32;
 
@@ -153,15 +154,73 @@ impl Observer for () {
     type AllGeneratedLocationsFor = ();
 }
 
+#[derive(Debug)]
+enum LazilySorted<T, F, O> {
+    Sorted(Vec<T>, PhantomData<F>, PhantomData<O>),
+    Unsorted(Vec<T>),
+}
+
+impl<T, F, O> LazilySorted<T, F, O>
+where
+    F: comparators::ComparatorFunction<T>,
+    O: Default,
+{
+    #[inline]
+    fn sort(&mut self) -> &[T] {
+        let me = mem::replace(self, LazilySorted::Unsorted(vec![]));
+        let items = match me {
+            LazilySorted::Sorted(items, ..) => items,
+            LazilySorted::Unsorted(mut items) => {
+                let _observer = O::default();
+                items.sort_unstable_by(F::compare);
+                items
+            }
+        };
+        mem::replace(self, LazilySorted::Sorted(items, PhantomData, PhantomData));
+        unwrap(self.sorted())
+    }
+
+    #[inline]
+    fn unsorted(&mut self) -> Option<&mut Vec<T>> {
+        match *self {
+            LazilySorted::Unsorted(ref mut items) => Some(items),
+            LazilySorted::Sorted(..) => None,
+        }
+    }
+
+    #[inline]
+    fn sorted(&self) -> Option<&[T]> {
+        match *self {
+            LazilySorted::Sorted(ref items, ..) => Some(items),
+            LazilySorted::Unsorted(_) => None,
+        }
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        match *self {
+            LazilySorted::Sorted(ref items, ..) |
+            LazilySorted::Unsorted(ref items) => items.is_empty()
+        }
+    }
+}
+
 /// A parsed set of mappings that can be queried.
 ///
 /// Constructed via `parse_mappings`.
 #[derive(Debug)]
-pub struct Mappings<O = ()> {
+pub struct Mappings<O = ()>
+where
+    O: Observer
+{
     by_generated: Vec<Mapping>,
-    by_original: Option<Vec<Mapping>>,
     computed_column_spans: bool,
     observer: O,
+
+    // The `by_original` field maps source index to mappings within that
+    // original source. This lets us essentially do bucket sort on a per-source
+    // basis, and also enables lazily sorting different source's mappings.
+    by_original: Option<Vec<LazilySorted<Mapping, comparators::ByOriginalLocationSameSource, O::SortByOriginalLocation>>>,
 }
 
 #[cfg(debug_assertions)]
@@ -191,10 +250,17 @@ impl<O: Observer> Mappings<O> {
     /// After this method has been called, any mappings with
     /// `last_generated_column == None` means that the mapping spans to the end
     /// of the line.
+    #[inline]
     pub fn compute_column_spans(&mut self) {
         if self.computed_column_spans {
             return;
         }
+        self.compute_column_spans_slow_path();
+    }
+
+    #[inline(never)]
+    fn compute_column_spans_slow_path(&mut self) {
+        debug_assert!(!self.computed_column_spans);
 
         let _observer = O::ComputeColumnSpans::default();
 
@@ -210,25 +276,54 @@ impl<O: Observer> Mappings<O> {
         self.computed_column_spans = true;
     }
 
-    /// Get the set of mappings that have original location information, ordered
-    /// by original location.
-    pub fn by_original_location(&mut self) -> &[Mapping] {
-        if let Some(ref by_original) = self.by_original {
-            return by_original;
+    #[inline]
+    fn source_buckets(&mut self) -> &mut [LazilySorted<Mapping, comparators::ByOriginalLocationSameSource, O::SortByOriginalLocation>] {
+        if let Some(ref mut buckets) = self.by_original {
+            return buckets;
         }
+        self.source_buckets_slow_path()
+    }
+
+    #[inline(never)]
+    fn source_buckets_slow_path(&mut self) -> &mut [LazilySorted<Mapping, comparators::ByOriginalLocationSameSource, O::SortByOriginalLocation>] {
+        debug_assert!(self.by_original.is_none());
 
         self.compute_column_spans();
 
-        let mut by_original: Vec<_> = self.by_generated
-            .iter()
-            .filter(|m| m.original.is_some())
-            .cloned()
-            .collect();
-
         let _observer = O::SortByOriginalLocation::default();
-        quick_sort::<comparators::ByOriginalLocation, _>(&mut by_original);
-        self.by_original = Some(by_original);
-        unwrap(self.by_original.as_ref().map(|origs| &origs[..]))
+
+        let mut originals = vec![];
+        for m in self.by_generated.iter().filter(|m| m.original.is_some()) {
+            let source = unwrap(m.original.as_ref()).source as usize;
+            while originals.len() <= source {
+                originals.push(LazilySorted::Unsorted(vec![]));
+            }
+            unwrap(originals[source].unsorted()).push(m.clone());
+        }
+
+        self.by_original = Some(originals);
+        unwrap(self.by_original.as_mut().map(|x| &mut x[..]))
+    }
+
+    /// Get the set of mappings that have original location information for the
+    /// given source and ordered by original location.
+    #[inline]
+    pub fn by_original_source(&mut self, source: u32) -> &[Mapping] {
+        if let Some(ms) = self.source_buckets().get_mut(source as usize) {
+            ms.sort()
+        } else {
+            &[]
+        }
+    }
+
+    /// Iterate over all mappings that contain original location information,
+    /// sorted by their original location information.
+    #[inline]
+    pub fn by_original_location(&mut self) -> ByOriginalLocation<O::SortByOriginalLocation> {
+        ByOriginalLocation {
+            buckets: self.source_buckets().iter_mut(),
+            this_bucket: [].iter(),
+        }
     }
 
     /// Get the mapping closest to the given generated location, if any exists.
@@ -271,26 +366,59 @@ impl<O: Observer> Mappings<O> {
     ) -> Option<&Mapping> {
         let _observer = O::GeneratedLocationFor::default();
 
-        let by_original = self.by_original_location();
+        let position = {
+            let by_original = self.by_original_source(source);
 
-        let position = by_original.binary_search_by(|m| {
-            let original = unwrap(m.original.as_ref());
-            original
-                .source
-                .cmp(&source)
-                .then(original.original_line.cmp(&original_line))
-                .then(original.original_column.cmp(&original_column))
-        });
+            by_original.binary_search_by(|m| {
+                let original = unwrap(m.original.as_ref());
+                original
+                    .source
+                    .cmp(&source)
+                    .then(original.original_line.cmp(&original_line))
+                    .then(original.original_column.cmp(&original_column))
+            })
+        };
 
-        match position {
-            Ok(idx) => Some(&by_original[idx]),
-            Err(idx) => match bias {
-                Bias::LeastUpperBound => by_original.get(idx),
-                Bias::GreatestLowerBound => if idx == 0 {
-                    None
-                } else {
-                    by_original.get(idx - 1)
-                },
+        let idx = match position {
+            Ok(idx) => return Some(&self.by_original_source(source)[idx]),
+            Err(idx) => idx,
+        };
+
+        match bias {
+            Bias::LeastUpperBound => if idx == self.by_original_source(source).len() {
+                // Slide down to the next source's set of mappings.
+                let mut source = source + 1;
+                while unwrap(self.by_original.as_ref())
+                    .get(source as usize)
+                    .map_or(false, |b| b.is_empty())
+                {
+                    source += 1;
+                }
+                unwrap(self.by_original.as_mut())
+                    .get_mut(source as usize)
+                    .and_then(|ms| ms.sort().first())
+            } else {
+                self.by_original_source(source).get(idx)
+            },
+
+            Bias::GreatestLowerBound => if idx == 0 {
+                if source == 0 {
+                    return None;
+                }
+
+                // Slide up to the previous source's set of mappings.
+                let mut source = source - 1;
+                while source > 0 && unwrap(self.by_original.as_ref())
+                    .get(source as usize)
+                    .map_or(false, |b| b.is_empty())
+                {
+                    source -= 1;
+                }
+                unwrap(self.by_original.as_mut())
+                    .get_mut(source as usize)
+                    .and_then(|ms| ms.sort().first())
+            } else {
+                self.by_original_source(source).get(idx - 1)
             },
         }
     }
@@ -311,14 +439,12 @@ impl<O: Observer> Mappings<O> {
 
         let query_column = original_column.unwrap_or(0);
 
-        let by_original = self.by_original_location();
+        let by_original = self.by_original_source(source);
 
         let compare = |m: &Mapping| {
             let original: &OriginalLocation = unwrap(m.original.as_ref());
-            original
-                .source
-                .cmp(&source)
-                .then(original.original_line.cmp(&original_line))
+            debug_assert_eq!(unwrap(m.original.as_ref()).source, source);
+            original.original_line.cmp(&original_line)
                 .then(original.original_column.cmp(&query_column))
         };
 
@@ -358,14 +484,13 @@ impl<O: Observer> Mappings<O> {
 
         AllGeneratedLocationsFor {
             mappings,
-            source,
             original_line,
             original_column,
         }
     }
 }
 
-impl<O: Default> Default for Mappings<O> {
+impl<O: Observer> Default for Mappings<O> {
     #[inline]
     fn default() -> Mappings<O> {
         Mappings {
@@ -377,11 +502,37 @@ impl<O: Default> Default for Mappings<O> {
     }
 }
 
+/// An iterator returned by `Mappings::by_original_location`.
+#[derive(Debug)]
+pub struct ByOriginalLocation<'a, O: 'a> {
+    buckets: slice::IterMut<'a, LazilySorted<Mapping, comparators::ByOriginalLocationSameSource, O>>,
+    this_bucket: slice::Iter<'a, Mapping>,
+}
+
+impl<'a, O: 'a + Default> Iterator for ByOriginalLocation<'a, O> {
+    type Item = &'a Mapping;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(m) = self.this_bucket.next() {
+                return Some(m);
+            }
+
+            if let Some(b) = self.buckets.next() {
+                self.this_bucket = b.sort().iter();
+                continue;
+            }
+
+            return None;
+        }
+    }
+}
+
 /// An iterator returned by `Mappings::all_generated_locations_for`.
 #[derive(Debug)]
 pub struct AllGeneratedLocationsFor<'a> {
     mappings: slice::Iter<'a, Mapping>,
-    source: u32,
     original_line: u32,
     original_column: Option<u32>,
 }
@@ -396,7 +547,7 @@ impl<'a> Iterator for AllGeneratedLocationsFor<'a> {
             Some(m) => {
                 let m_orig = unwrap(m.original.as_ref());
 
-                if m_orig.source != self.source || m_orig.original_line != self.original_line {
+                if m_orig.original_line != self.original_line {
                     return None;
                 }
 
@@ -505,6 +656,7 @@ pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
     let mut original_column = 0;
     let mut source = 0;
     let mut name = 0;
+    let mut generated_line_start_index = 0;
 
     let mut mappings = Mappings::default();
 
@@ -521,6 +673,17 @@ pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
                 generated_line += 1;
                 generated_column = 0;
                 unwrap(input.next());
+
+                // Because mappings are sorted with regards to generated line
+                // due to the encoding format, and sorting by generated location
+                // starts by comparing generated line, we can sort only the
+                // smaller subsequence of this generated line's mappings and end
+                // up with a fully sorted array.
+                if generated_line_start_index < by_generated.len() {
+                    let _observer = O::SortByGeneratedLocation::default();
+                    by_generated[generated_line_start_index..].sort_unstable_by(comparators::ByGeneratedTail::compare);
+                    generated_line_start_index = by_generated.len();
+                }
             }
             b',' => {
                 unwrap(input.next());
@@ -560,8 +723,11 @@ pub fn parse_mappings<O: Observer>(input: &[u8]) -> Result<Mappings<O>, Error> {
         }
     }
 
-    let _observer = O::SortByGeneratedLocation::default();
-    quick_sort::<comparators::ByGeneratedLocation, _>(&mut by_generated);
+    if generated_line_start_index < by_generated.len() {
+        let _observer = O::SortByGeneratedLocation::default();
+        by_generated[generated_line_start_index..].sort_unstable_by(comparators::ByGeneratedTail::compare);
+    }
+
     mappings.by_generated = by_generated;
     Ok(mappings)
 }
