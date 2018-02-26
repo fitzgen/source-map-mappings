@@ -502,7 +502,7 @@ impl<O: Observer> Default for Mappings<O> {
     }
 }
 
-/// An iterator returned by `Mappigns::by_original_location`.
+/// An iterator returned by `Mappings::by_original_location`.
 #[derive(Debug)]
 pub struct ByOriginalLocation<'a, O: 'a> {
     buckets: slice::IterMut<'a, LazilySorted<Mapping, comparators::ByOriginalLocationSameSource, O>>,
